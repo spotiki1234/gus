@@ -544,12 +544,44 @@ export default function App() {
               </div>
             )}
 
-            {/* ВЫБОР STARS */}
+            {/* ВЫБОР И РУЧНОЙ ВВОД STARS */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '46px', marginBottom: '8px' }}>⭐</div>
-                <div style={{ fontSize: '18px', fontWeight: '800' }}>Telegram Stars</div>
-                <div style={{ fontSize: '32px', fontWeight: '900', color: '#fbbf24', margin: '12px 0' }}>{starsToBuy} ⭐</div>
+                <div style={{ fontSize: '18px', fontWeight: '800' }}>Покупка через Stars</div>
+                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
+                  Оплачивайте официальными звёздами Telegram
+                </p>
+
+                {/* Поле ручного ввода любого количества звёзд */}
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100000"
+                    value={starsToBuy || ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setStarsToBuy(isNaN(val) ? 0 : Math.max(0, val));
+                    }}
+                    placeholder="0"
+                    style={{
+                      width: '160px',
+                      background: '#171126',
+                      border: '2px solid #fbbf24',
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontSize: '32px',
+                      fontWeight: '900',
+                      color: '#fbbf24',
+                      textAlign: 'center',
+                      outline: 'none',
+                    }}
+                  />
+                  <span style={{ fontSize: '32px', color: '#fbbf24' }}>★</span>
+                </div>
+
+                {/* Быстрые кнопки пресетов */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
                   {[50, 100, 500, 1000].map((val) => (
                     <button
@@ -557,25 +589,40 @@ export default function App() {
                       onClick={() => setStarsToBuy(val)}
                       style={{
                         flex: 1,
-                        padding: '12px 0',
-                        borderRadius: '16px',
+                        padding: '10px 0',
+                        borderRadius: '14px',
                         border: 'none',
                         background: starsToBuy === val ? '#fbbf24' : '#1b1436',
                         color: starsToBuy === val ? '#000' : '#fff',
                         fontWeight: '800',
                         fontSize: '13px',
                         cursor: 'pointer',
+                        transition: 'all 0.2s',
                       }}
                     >
                       {val} ★
                     </button>
                   ))}
                 </div>
+
+                {/* Кнопка запуска настоящей оплаты */}
                 <button
+                  disabled={!starsToBuy || starsToBuy <= 0}
                   onClick={() => handleRealStarsPayment(starsToBuy)}
-                  style={{ width: '100%', padding: '16px', borderRadius: '20px', border: 'none', background: '#eab308', color: '#000', fontWeight: '800', fontSize: '16px', cursor: 'pointer' }}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: starsToBuy > 0 ? '#eab308' : '#33294d',
+                    color: starsToBuy > 0 ? '#000' : '#736b8a',
+                    fontWeight: '800',
+                    fontSize: '16px',
+                    cursor: starsToBuy > 0 ? 'pointer' : 'not-allowed',
+                    boxShadow: starsToBuy > 0 ? '0 4px 20px rgba(234, 179, 8, 0.4)' : 'none',
+                  }}
                 >
-                  Купить {starsToBuy} Stars
+                  Купить {starsToBuy || 0} Stars
                 </button>
               </div>
             )}
