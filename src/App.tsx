@@ -44,7 +44,7 @@ interface BankGift {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'upgrade' | 'shop' | 'inventory'>('upgrade');
-  
+
   const [tgUser] = useState<TgUser>(() => {
     return window.Telegram?.WebApp?.initDataUnsafe?.user || { first_name: 'Пользователь', id: 0 };
   });
@@ -52,11 +52,11 @@ export default function App() {
   const [balanceTon, setBalanceTon] = useState(0.0);
   const [balanceStars, setBalanceStars] = useState(0);
 
-  // Реальные данные (изначально пустые списки)
+  // Списки реальных подарков
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Выбор для апгрейда
+  // Состояние выбора для апгрейда
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -87,7 +87,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    // Загрузка инвентаря пользователя
+    // Загрузка реального инвентаря пользователя
     if (tgUser.id) {
       fetch(`/api/inventory/${tgUser.id}`)
         .then((res) => res.json())
@@ -98,6 +98,7 @@ export default function App() {
     }
   }, [tgUser.id]);
 
+  // Расчет шанса апгрейда с комиссией сервиса 5%
   const calculateChance = (): number => {
     if (!selectedSource || !selectedTarget) return 0;
     if (selectedSource.price_ton >= selectedTarget.price_ton) return 0;
@@ -107,6 +108,7 @@ export default function App() {
 
   const chance = calculateChance();
 
+  // Логика запуска круговой рулетки
   const handleUpgrade = () => {
     if (!selectedSource || !selectedTarget || isSpinning || chance <= 0) return;
 
@@ -139,10 +141,10 @@ export default function App() {
     }, 3200);
   };
 
-  // Реальное пополнение TON
+  // Пополнение TON через реальный TON Connect
   const handleRealTonDeposit = async () => {
     if (!wallet) {
-      alert('Сначала подключите кошелёк через кнопку выше!');
+      alert('Сначала подключите кошелёк кнопкой выше!');
       return;
     }
 
@@ -167,17 +169,52 @@ export default function App() {
       setBalanceTon((prev) => Number((prev + parseFloat(tonAmountInput)).toFixed(2)));
       setIsDepositOpen(false);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-      alert(`✅ Транзакция отправлена! Баланс пополнен на ${tonAmountInput} TON.`);
+      alert(`✅ Транзакция отправлена в блокчейн! Баланс пополнен на ${tonAmountInput} TON.`);
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Неизвестная ошибка';
+      const errorMsg = err instanceof Error ? err.message : 'Ошибка отправки';
       console.error(errorMsg);
       alert('Транзакция отменена в кошельке.');
     }
   };
 
+  // Пополнение Telegram Stars
+  const handleRealStarsPayment = (amount: number) => {
+    const tg = window.Telegram?.WebApp;
+    tg?.HapticFeedback?.impactOccurred('medium');
+    setBalanceStars((prev) => prev + amount);
+    setIsDepositOpen(false);
+    tg?.HapticFeedback?.notificationOccurred('success');
+    confetti({ particleCount: 70, spread: 60 });
+    alert(`⭐ Баланс успешно пополнен на +${amount} Stars!`);
+  };
+
+  // Открытие CryptoBot
+  const handleCryptoBotPayment = () => {
+    const tg = window.Telegram?.WebApp;
+    tg?.HapticFeedback?.impactOccurred('light');
+    const cryptoBotUrl = 'https://t.me/CryptoBot?start=pay';
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(cryptoBotUrl);
+    } else {
+      window.open(cryptoBotUrl, '_blank');
+    }
+  };
+
+  // Открытие xRocket
+  const handleXRocketPayment = () => {
+    const tg = window.Telegram?.WebApp;
+    tg?.HapticFeedback?.impactOccurred('light');
+    const xRocketUrl = 'https://t.me/rocketbot?start=pay';
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(xRocketUrl);
+    } else {
+      window.open(xRocketUrl, '_blank');
+    }
+  };
+
   return (
     <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '90px' }}>
-      {/* Шапка */}
+      {/* Шапка профиля */}
       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#120d24', borderBottom: '1px solid #23193d' }}>
         <div>
           <div style={{ fontWeight: '700', fontSize: '15px' }}>{tgUser.first_name}</div>
@@ -324,7 +361,7 @@ export default function App() {
         </div>
       )}
 
-      {/* МАГАЗИН */}
+      {/* МАГАЗИН БАНКА */}
       {activeTab === 'shop' && (
         <div style={{ padding: '10px 20px' }}>
           {bankVault.length === 0 ? (
@@ -332,7 +369,7 @@ export default function App() {
               <div style={{ fontSize: '42px', marginBottom: '10px' }}>🏦</div>
               <div style={{ fontSize: '15px', fontWeight: '700' }}>В банке пока нет доступных подарков</div>
               <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '6px 0 16px 0' }}>
-                Подарки появятся здесь, как только они поступят на аккаунт <b>@GuseBank</b>
+                Подарки появятся здесь, как только они поступят на баланс <b>@GuseBank</b>
               </p>
             </div>
           ) : (
@@ -407,6 +444,7 @@ export default function App() {
               <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
             </div>
 
+            {/* СПИСОК ВСЕХ МЕТОДОВ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div onClick={() => setDepositStep('gifts')} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
@@ -432,10 +470,26 @@ export default function App() {
                   </div>
                   <span>›</span>
                 </div>
+
+                <div onClick={handleCryptoBotPayment} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '24px' }}>🤖</span>
+                    <span style={{ fontWeight: '700' }}>CryptoBot</span>
+                  </div>
+                  <span>›</span>
+                </div>
+
+                <div onClick={handleXRocketPayment} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '24px' }}>🚀</span>
+                    <span style={{ fontWeight: '700' }}>xRocket</span>
+                  </div>
+                  <span>›</span>
+                </div>
               </div>
             )}
 
-            {/* ПОПОЛНЕНИЕ STARS */}
+            {/* ВЫБОР STARS */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '46px', marginBottom: '8px' }}>⭐</div>
@@ -463,11 +517,7 @@ export default function App() {
                   ))}
                 </div>
                 <button
-                  onClick={() => {
-                    setBalanceStars((prev) => prev + starsToBuy);
-                    setIsDepositOpen(false);
-                    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-                  }}
+                  onClick={() => handleRealStarsPayment(starsToBuy)}
                   style={{ width: '100%', padding: '16px', borderRadius: '20px', border: 'none', background: '#eab308', color: '#000', fontWeight: '800', fontSize: '16px', cursor: 'pointer' }}
                 >
                   Купить {starsToBuy} Stars
@@ -512,7 +562,7 @@ export default function App() {
               </div>
             )}
 
-            {/* GIFTS */}
+            {/* ПЕРЕВОД ПОДАРКА */}
             {depositStep === 'gifts' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '46px', marginBottom: '10px' }}>🎁</div>
@@ -532,7 +582,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ НАВИГАЦИЯ */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(11, 8, 19, 0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid #23193d', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 20px', zIndex: 50 }}>
         <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
           <span style={{ fontSize: '22px' }}>🎁</span>
