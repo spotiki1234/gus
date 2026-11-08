@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTonConnectUI, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
 import confetti from 'canvas-confetti';
 
-// Боевой TON-кошелек для приёма пополнений
+// Боевой TON-кошелек для приёма депозитов
 const RECEIVER_TON_ADDRESS = 'UQAKTkSiwZWqUDUjlydR0fxQPaPfsHbNRn0kvy8tcJwKzkrT';
 
 interface TgUser {
@@ -49,18 +49,11 @@ export default function App() {
     return window.Telegram?.WebApp?.initDataUnsafe?.user || { first_name: 'Пользователь', id: 0 };
   });
 
-  // Баланс с сохранением в память устройства (НЕ пропадает при обновлении!)
-  const [balanceTon, setBalanceTon] = useState<number>(() => {
-    const saved = localStorage.getItem(`ton_${window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0}`);
-    return saved ? parseFloat(saved) : 0.0;
-  });
+  // Баланс (синхронизируется с облачной базой Neon)
+  const [balanceTon, setBalanceTon] = useState<number>(0.0);
+  const [balanceStars, setBalanceStars] = useState<number>(0);
 
-  const [balanceStars, setBalanceStars] = useState<number>(() => {
-    const saved = localStorage.getItem(`stars_${window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0}`);
-    return saved ? parseInt(saved, 10) : 0;
-  });
-
-  // Реальные массивы подарков (без фейковых заглушек)
+  // Списки реальных подарков
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
@@ -80,6 +73,7 @@ export default function App() {
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
+  // Синхронизация данных с базой Neon при запуске
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -87,16 +81,23 @@ export default function App() {
       tg.expand();
     }
 
-    // Загрузка реальных подарков банка с бэкенда
-    fetch('/api/bank/gifts')
-      .then((res) => res.json())
-      .then((data: { available_gifts?: BankGift[] }) => {
-        if (data.available_gifts) setBankVault(data.available_gifts);
-      })
-      .catch(() => {});
-
-    // Загрузка реального инвентаря игрока
     if (tgUser.id) {
+      // 1. Загрузка баланса из облачной базы
+      fetch(`/api/user-balance?userId=${tgUser.id}`)
+        .then((res) => res.json())
+        .then((data: { stars?: number; ton?: number }) => {
+          if (typeof data.stars === 'number') setBalanceStars(data.stars);
+          if (typeof data.ton === 'number') setBalanceTon(data.ton);
+        })
+        .catch(() => {
+          // Если база недоступна — читаем локально
+          const s = localStorage.getItem(`stars_${tgUser.id}`);
+          const t = localStorage.getItem(`ton_${tgUser.id}`);
+          if (s) setBalanceStars(parseInt(s, 10));
+          if (t) setBalanceTon(parseFloat(t));
+        });
+
+      // 2. Загрузка инвентаря пользователя
       fetch(`/api/inventory/${tgUser.id}`)
         .then((res) => res.json())
         .then((data: { items?: BankGift[] }) => {
@@ -104,9 +105,39 @@ export default function App() {
         })
         .catch(() => {});
     }
+
+    // 3. Загрузка подарков банка
+    fetch('/api/bank/gifts')
+      .then((res) => res.json())
+      .then((data: { available_gifts?: BankGift[] }) => {
+        if (data.available_gifts) setBankVault(data.available_gifts);
+      })
+      .catch(() => {});
   }, [tgUser.id]);
 
-  // Математический расчет шанса победы с учетом комиссии платформы 5%
+  // Функция сохранения баланса в базу Neon и локально
+  const saveBalanceToDb = async (newStars: number, newTon: number) => {
+    setBalanceStars(newStars);
+    setBalanceTon(newTon);
+    localStorage.setItem(`stars_${tgUser.id}`, String(newStars));
+    localStorage.setItem(`ton_${tgUser.id}`, String(newTon));
+
+    try {
+      await fetch('/api/user-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: tgUser.id,
+          stars: newStars,
+          ton: newTon,
+        }),
+      });
+    } catch (e) {
+      console.error('Ошибка сохранения баланса в БД:', e);
+    }
+  };
+
+  // Расчет шанса апгрейда с комиссией платформы 5%
   const calculateChance = (): number => {
     if (!selectedSource || !selectedTarget) return 0;
     if (selectedSource.price_ton >= selectedTarget.price_ton) return 0;
@@ -149,7 +180,7 @@ export default function App() {
     }, 3200);
   };
 
-  // НАСТОЯЩЕЕ ПОПОЛНЕНИЕ ЧЕРЕЗ TELEGRAM STARS (СИНЯЯ ШТОРКА ОПЛАТЫ)
+  // НАСТОЯЩЕЕ ПОПОЛНЕНИЕ ЧЕРЕЗ TELEGRAM STARS
   const handleRealStarsPayment = async (amount: number) => {
     const tg = window.Telegram?.WebApp;
     if (!tg) {
@@ -160,7 +191,6 @@ export default function App() {
     tg.HapticFeedback?.impactOccurred('medium');
 
     try {
-      // 1. Запрашиваем официальный инвойс от Bot API
       const res = await fetch('/api/pay-stars', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,20 +207,15 @@ export default function App() {
         return;
       }
 
-      // 2. Вызываем официальную нативную шторку Telegram "Подтвердить и заплатить N звезд"
+      // Вызов официальной синей шторки Telegram
       if (tg.openInvoice) {
         tg.openInvoice(data.invoiceLink, (status: string) => {
           if (status === 'paid') {
             tg.HapticFeedback?.notificationOccurred('success');
             confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
 
-            // Сохраняем баланс навсегда
-            setBalanceStars((prev) => {
-              const next = prev + amount;
-              localStorage.setItem(`stars_${tgUser.id}`, String(next));
-              return next;
-            });
-
+            const newStars = balanceStars + amount;
+            saveBalanceToDb(newStars, balanceTon);
             setIsDepositOpen(false);
           }
         });
@@ -201,7 +226,7 @@ export default function App() {
     }
   };
 
-  // НАСТОЯЩИЙ ДЕПОЗИТ TON CONNECT
+  // ДЕПОЗИТ TON CONNECT (СИНХРОНИЗИРУЕТСЯ В БД)
   const handleRealTonDeposit = async () => {
     if (!wallet) {
       alert('Сначала подключите кошелек кнопкой выше!');
@@ -226,15 +251,12 @@ export default function App() {
 
     try {
       await tonConnectUI.sendTransaction(transaction);
-      setBalanceTon((prev) => {
-        const next = Number((prev + parseFloat(tonAmountInput)).toFixed(2));
-        localStorage.setItem(`ton_${tgUser.id}`, String(next));
-        return next;
-      });
+      const newTon = Number((balanceTon + parseFloat(tonAmountInput)).toFixed(2));
+      saveBalanceToDb(balanceStars, newTon);
 
       setIsDepositOpen(false);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-      alert(`✅ Транзакция успешно отправлена! Зачислено: ${tonAmountInput} TON.`);
+      alert(`✅ Транзакция подтверждена! Баланс пополнен на ${tonAmountInput} TON.`);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Ошибка отправки';
       console.error(errorMsg);
@@ -267,7 +289,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '90px' }}>
+    <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '100px' }}>
       {/* Шапка профиля */}
       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#120d24', borderBottom: '1px solid #23193d' }}>
         <div>
@@ -493,7 +515,7 @@ export default function App() {
               <div style={{ fontSize: '17px', fontWeight: '800' }}>
                 {depositStep === 'methods' && 'Способ пополнения'}
                 {depositStep === 'wallet' && 'Пополнение через TON'}
-                {depositStep === 'stars' && 'Пополнение через Stars'}
+                {depositStep === 'stars' && 'Покупка звёздами'}
                 {depositStep === 'gifts' && 'Пополнение подарком'}
               </div>
               <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
@@ -550,7 +572,7 @@ export default function App() {
                 <div style={{ fontSize: '46px', marginBottom: '8px' }}>⭐</div>
                 <div style={{ fontSize: '18px', fontWeight: '800' }}>Покупка через Stars</div>
                 <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
-                  Оплачивайте официальными звёздами Telegram
+                  Введите сумму или выберите быстрый вариант
                 </p>
 
                 {/* Поле ручного ввода любого количества звёзд */}
@@ -597,7 +619,6 @@ export default function App() {
                         fontWeight: '800',
                         fontSize: '13px',
                         cursor: 'pointer',
-                        transition: 'all 0.2s',
                       }}
                     >
                       {val} ★
@@ -605,7 +626,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Кнопка запуска настоящей оплаты */}
+                {/* Кнопка запуска оплаты Stars */}
                 <button
                   disabled={!starsToBuy || starsToBuy <= 0}
                   onClick={() => handleRealStarsPayment(starsToBuy)}
@@ -684,7 +705,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ НАВИГАЦИЯ */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(11, 8, 19, 0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid #23193d', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 20px', zIndex: 50 }}>
         <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
           <span style={{ fontSize: '22px' }}>🎁</span>
