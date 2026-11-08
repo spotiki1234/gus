@@ -67,12 +67,17 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
+  // Статистика выведенных предметов
+  const [withdrawnCount, setWithdrawnCount] = useState<number>(0);
+  const [withdrawnTotalTon, setWithdrawnTotalTon] = useState<number>(0.0);
+
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinAngle, setSpinAngle] = useState(0);
 
-  // Шторка пополнения
+  // Шторки
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'cryptobot'>('methods');
   const [tonAmountInput, setTonAmountInput] = useState('1.0');
@@ -106,6 +111,12 @@ export default function App() {
           if (data.items) setUserInventory(data.items);
         })
         .catch(() => {});
+
+      // Загрузка статистики выводов пользователя
+      const savedWithdrawnCount = localStorage.getItem(`withdrawn_count_${tgUser.id}`);
+      const savedWithdrawnTotal = localStorage.getItem(`withdrawn_total_${tgUser.id}`);
+      if (savedWithdrawnCount) setWithdrawnCount(parseInt(savedWithdrawnCount, 10));
+      if (savedWithdrawnTotal) setWithdrawnTotalTon(parseFloat(savedWithdrawnTotal));
     }
 
     fetch('/api/bank-gifts')
@@ -297,10 +308,21 @@ export default function App() {
     const tg = window.Telegram?.WebApp;
     tg?.HapticFeedback?.impactOccurred('light');
     setIsDepositOpen(false);
+    setIsProfileOpen(false);
     if (tg?.openTelegramLink) {
       tg.openTelegramLink('https://t.me/GuseBank');
     } else {
       window.open('https://t.me/GuseBank', '_blank');
+    }
+  };
+
+  // Отключение кошелька
+  const handleDisconnectWallet = async () => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    try {
+      await tonConnectUI.disconnect();
+    } catch (e) {
+      console.error('Ошибка отвязки кошелька:', e);
     }
   };
 
@@ -336,7 +358,7 @@ export default function App() {
           Guse<span style={{ color: '#eab308' }}>Up</span>
         </div>
 
-        {/* Правый блок: Баланс + Аватарка */}
+        {/* Правый блок: Баланс + Аватарка (кликабельная для открытия профиля) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             onClick={() => {
@@ -377,7 +399,12 @@ export default function App() {
             </div>
           </div>
 
+          {/* Аватарка пользователя: по клику открывает профиль */}
           <div
+            onClick={() => {
+              window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+              setIsProfileOpen(true);
+            }}
             style={{
               width: '36px',
               height: '36px',
@@ -387,9 +414,11 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'center',
               overflow: 'hidden',
-              border: '2px solid #3b2d6b',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              border: '2px solid #eab308',
+              boxShadow: '0 2px 10px rgba(234, 179, 8, 0.35)',
               flexShrink: 0,
+              cursor: 'pointer',
+              transition: 'transform 0.15s ease',
             }}
           >
             {tgUser.photo_url ? (
@@ -530,7 +559,6 @@ export default function App() {
               <div style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>
                 Мой инвентарь ({userInventory.length})
               </div>
-              {/* Кнопка «Пополнить» */}
               <button
                 onClick={() => {
                   setIsDepositOpen(true);
@@ -549,7 +577,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Если инвентарь пуст — карточка перенаправляет в магазин */}
             {userInventory.length === 0 ? (
               <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
                 <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -663,9 +690,223 @@ export default function App() {
         </div>
       )}
 
+      {/* ШТОРКА ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ */}
+      {isProfileOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 110, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '88vh', overflowY: 'auto' }}>
+            
+            {/* Шапка шторки */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '17px', fontWeight: '800' }}>Мой профиль</div>
+              <button
+                onClick={() => setIsProfileOpen(false)}
+                style={{
+                  background: '#20163d',
+                  border: 'none',
+                  color: '#fff',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Карточка пользователя с балансом и пополнением */}
+            <div style={{ background: 'linear-gradient(135deg, #1b1338 0%, #130d29 100%)', borderRadius: '22px', padding: '16px', border: '1px solid #33235d', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                <div
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #a855f7 0%, #6b21a8 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    border: '2px solid #eab308',
+                    flexShrink: 0,
+                  }}
+                >
+                  {tgUser.photo_url ? (
+                    <img src={tgUser.photo_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontWeight: '800', fontSize: '20px', color: '#fff' }}>{userInitial}</span>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '16px', fontWeight: '800' }}>{tgUser.first_name}</div>
+                  <div style={{ fontSize: '11px', color: '#8b7fa8' }}>
+                    {tgUser.username ? `@${tgUser.username}` : `ID: ${tgUser.id}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Баланс + кнопка Пополнить */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0e091e', padding: '12px 14px', borderRadius: '16px', border: '1px solid #23193d' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Баланс</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <img src={ICONS.ton} alt="TON" style={{ width: '18px', height: '18px', borderRadius: '4px' }} />
+                    {balanceTon.toFixed(2)} TON
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    setIsDepositOpen(true);
+                    setDepositStep('methods');
+                  }}
+                  style={{
+                    background: '#eab308',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '14px',
+                    padding: '9px 18px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(234, 179, 8, 0.35)',
+                  }}
+                >
+                  Пополнить
+                </button>
+              </div>
+            </div>
+
+            {/* Блок привязки / отвязки кошелька */}
+            <div style={{ background: '#171126', borderRadius: '20px', padding: '14px', border: '1px solid #271c47', marginBottom: '14px' }}>
+              <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>
+                TON Кошелек
+              </div>
+              {wallet ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '32px', height: '32px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#4ade80' }}>Кошелек привязан</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>
+                        {wallet.account.address.slice(0, 4)}...{wallet.account.address.slice(-4)}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDisconnectWallet}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: '12px',
+                      padding: '7px 12px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Отвязать
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#8b7fa8' }}>Кошелек не подключен</div>
+                  <TonConnectButton />
+                </div>
+              )}
+            </div>
+
+            {/* Статистика выведенных предметов */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
+              <div style={{ background: '#171126', borderRadius: '18px', padding: '12px 14px', border: '1px solid #271c47' }}>
+                <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Выведено предметов</div>
+                <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff', marginTop: '4px' }}>
+                  {withdrawnCount} шт.
+                </div>
+              </div>
+              <div style={{ background: '#171126', borderRadius: '18px', padding: '12px 14px', border: '1px solid #271c47' }}>
+                <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Общая сумма</div>
+                <div style={{ fontSize: '18px', fontWeight: '900', color: '#0098ea', marginTop: '4px' }}>
+                  💎 {withdrawnTotalTon.toFixed(2)} TON
+                </div>
+              </div>
+            </div>
+
+            {/* Инвентарь внизу профиля */}
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Инвентарь ({userInventory.length})</span>
+                <span style={{ fontSize: '11px', color: '#8b7fa8' }}>Тапните для выбора</span>
+              </div>
+
+              {userInventory.length === 0 ? (
+                <div style={{ background: '#171126', borderRadius: '18px', padding: '20px 14px', textAlign: 'center', border: '1px solid #271c47' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#8b7fa8' }}>В инвентаре пока нет предметов</div>
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setActiveTab('shop');
+                    }}
+                    style={{
+                      marginTop: '10px',
+                      background: '#a855f7',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '7px 16px',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Перейти в магазин
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {userInventory.map((gift) => (
+                    <div
+                      key={gift.id}
+                      onClick={() => {
+                        setSelectedSource(gift);
+                        setIsProfileOpen(false);
+                        setActiveTab('upgrade');
+                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      }}
+                      style={{
+                        background: '#1c1433',
+                        borderRadius: '18px',
+                        padding: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
+                      }}
+                    >
+                      <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
+                        💎 {gift.price_ton}
+                      </div>
+                      <img src={gift.image_url} alt="" style={{ width: '42px', height: '42px', margin: '4px 0', objectFit: 'contain' }} />
+                      <div style={{ fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{gift.name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) */}
       {isDepositOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 120, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '85vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
