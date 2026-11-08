@@ -292,7 +292,6 @@ export default function App() {
     }
   };
 
-  // Мгновенный переход на контакт банка без показа окна
   const handleOpenBankChat = () => {
     const tg = window.Telegram?.WebApp;
     tg?.HapticFeedback?.impactOccurred('light');
@@ -305,8 +304,6 @@ export default function App() {
   };
 
   const starsConvertedTon = (starsToBuy / STARS_PER_TON).toFixed(2);
-
-  // Инициал первой буквы для аватарки (если нет фото)
   const userInitial = tgUser.first_name ? tgUser.first_name.charAt(0).toUpperCase() : 'U';
 
   return (
@@ -317,7 +314,7 @@ export default function App() {
         minHeight: '100vh',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         paddingBottom: '90px',
-        zoom: 0.91, // Уменьшение всего интерфейса ровно в ~1.1 раза
+        zoom: 0.91,
       }}
     >
       {/* Шапка: логотип слева, Баланс и Аватарка в правом углу */}
@@ -331,13 +328,15 @@ export default function App() {
           borderBottom: '1px solid #23193d',
         }}
       >
-        <div style={{ fontWeight: '900', fontSize: '18px', letterSpacing: '-0.4px', color: '#fff' }}>
+        <div
+          onClick={() => setActiveTab('upgrade')}
+          style={{ fontWeight: '900', fontSize: '18px', letterSpacing: '-0.4px', color: '#fff', cursor: 'pointer' }}
+        >
           Guse<span style={{ color: '#eab308' }}>Up</span>
         </div>
 
         {/* Правый блок: Баланс + Аватарка */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Плашка баланса TON */}
           <div
             onClick={() => {
               setIsDepositOpen(true);
@@ -377,7 +376,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Аватарка пользователя в правом углу после баланса */}
           <div
             style={{
               width: '36px',
@@ -402,10 +400,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* Верхний таб-бар */}
+      {/* Верхний таб-бар переключения */}
       <div style={{ padding: '14px 18px 8px 18px', display: 'flex', gap: '10px' }}>
         <button
-          onClick={() => setActiveTab('inventory')}
+          onClick={() => setActiveTab('upgrade')}
           style={{
             flex: 1,
             padding: '11px',
@@ -413,13 +411,13 @@ export default function App() {
             border: 'none',
             fontWeight: '700',
             fontSize: '13px',
-            background: activeTab === 'inventory' ? '#eab308' : '#171126',
-            color: activeTab === 'inventory' ? '#000' : '#8b7fa8',
+            background: activeTab === 'upgrade' ? '#eab308' : '#171126',
+            color: activeTab === 'upgrade' ? '#000' : '#8b7fa8',
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
         >
-          Мои подарки ({userInventory.length})
+          Апгрейд
         </button>
         <button
           onClick={() => setActiveTab('shop')}
@@ -440,13 +438,12 @@ export default function App() {
         </button>
       </div>
 
-      {/* АРЕНА АПГРЕЙДА */}
+      {/* АРЕНА АПГРЕЙДА (С ИНВЕНТАРЕМ ПОД КНОПКОЙ «УЛУЧШИТЬ») */}
       {activeTab === 'upgrade' && (
         <div style={{ padding: '10px 18px' }}>
           <div style={{ background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: '800' }}>Арена Апгрейда</h3>
-
-            {/* Рулетка */}
+            
+            {/* Круговая рулетка */}
             <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 18px auto' }}>
               <div
                 style={{
@@ -482,11 +479,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* Ячейки апгрейда */}
+            {/* Слоты выбора предметов */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
               <div
-                onClick={() => setActiveTab('inventory')}
-                style={{ width: '110px', height: '120px', borderRadius: '20px', background: '#171126', border: selectedSource ? '2px solid #a855f7' : '2px dashed #3a2b61', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '6px' }}
+                style={{
+                  width: '110px',
+                  height: '120px',
+                  borderRadius: '20px',
+                  background: '#171126',
+                  border: selectedSource ? '2px solid #a855f7' : '2px dashed #3a2b61',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px',
+                }}
               >
                 {selectedSource ? (
                   <>
@@ -495,7 +502,7 @@ export default function App() {
                     <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedSource.price_ton}</span>
                   </>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>+ Выбрать свой</span>
+                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>Выбери из инвентаря</span>
                 )}
               </div>
 
@@ -503,7 +510,19 @@ export default function App() {
 
               <div
                 onClick={() => setActiveTab('shop')}
-                style={{ width: '110px', height: '120px', borderRadius: '20px', background: '#171126', border: selectedTarget ? '2px solid #eab308' : '2px dashed #3a2b61', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '6px' }}
+                style={{
+                  width: '110px',
+                  height: '120px',
+                  borderRadius: '20px',
+                  background: '#171126',
+                  border: selectedTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '6px',
+                }}
               >
                 {selectedTarget ? (
                   <>
@@ -517,6 +536,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Кнопка действия «Улучшить» */}
             <button
               onClick={handleUpgrade}
               disabled={!selectedSource || !selectedTarget || isSpinning || chance <= 0}
@@ -531,10 +551,90 @@ export default function App() {
                 fontWeight: '800',
                 cursor: !selectedSource || !selectedTarget || isSpinning ? 'not-allowed' : 'pointer',
                 boxShadow: selectedSource && selectedTarget ? '0 4px 18px rgba(168, 85, 247, 0.4)' : 'none',
+                transition: 'all 0.2s',
               }}
             >
-              {isSpinning ? 'КРУТИМ РУЛЕТКУ...' : 'УЛУЧШИТЬ ПОДАРОК'}
+              {isSpinning ? 'КРУТИМ РУЛЕТКУ...' : 'Улучшить'}
             </button>
+          </div>
+
+          {/* ИНВЕНТАРЬ ПОЛЬЗОВАТЕЛЯ ПРЯМО ПОД КНОПКОЙ «УЛУЧШИТЬ» */}
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>
+                Мой инвентарь ({userInventory.length})
+              </div>
+              <button
+                onClick={handleOpenBankChat}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#eab308',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                }}
+              >
+                + Пополнить подарком
+              </button>
+            </div>
+
+            {userInventory.length === 0 ? (
+              <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
+                <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
+                <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 12px 0' }}>
+                  Отправьте NFT-подарок на <b>@GuseBank</b> — он сразу появится здесь для улучшения
+                </p>
+                <button
+                  onClick={handleOpenBankChat}
+                  style={{
+                    background: '#a855f7',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    padding: '9px 18px',
+                    fontWeight: '700',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Передать подарок в Банк
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                {userInventory.map((gift) => (
+                  <div
+                    key={gift.id}
+                    onClick={() => {
+                      setSelectedSource(gift);
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                    }}
+                    style={{
+                      background: '#1c1433',
+                      borderRadius: '20px',
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
+                      boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
+                      💎 {gift.price_ton}
+                    </div>
+                    <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
+                    <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -560,6 +660,7 @@ export default function App() {
                   onClick={() => {
                     setSelectedTarget(gift);
                     setActiveTab('upgrade');
+                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                   }}
                   style={{
                     background: '#1c1433',
@@ -578,66 +679,6 @@ export default function App() {
                   <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
                   <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
                   <div style={{ fontSize: '8px', color: '#8b7fa8' }}>{gift.serial_number || '#0000'}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ИНВЕНТАРЬ ПОЛЬЗОВАТЕЛЯ */}
-      {activeTab === 'inventory' && (
-        <div style={{ padding: '10px 18px' }}>
-          {userInventory.length === 0 ? (
-            <div style={{ background: '#171126', borderRadius: '24px', padding: '32px 18px', textAlign: 'center', border: '1px solid #271c47' }}>
-              <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <img src={ICONS.gift} alt="Инвентарь" style={{ width: '28px', height: '28px', filter: 'invert(1)' }} />
-              </div>
-              <div style={{ fontSize: '15px', fontWeight: '800' }}>Ваш инвентарь пуст</div>
-              <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '6px 0 14px 0' }}>
-                Отправьте свой NFT-подарок на <b>@GuseBank</b> в Telegram — он автоматически появится здесь!
-              </p>
-              <button
-                onClick={handleOpenBankChat}
-                style={{
-                  background: '#a855f7',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '14px',
-                  padding: '11px 20px',
-                  fontWeight: '700',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                Отправить подарок в Банк
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {userInventory.map((gift) => (
-                <div
-                  key={gift.id}
-                  onClick={() => {
-                    setSelectedSource(gift);
-                    setActiveTab('upgrade');
-                  }}
-                  style={{
-                    background: '#1c1433',
-                    borderRadius: '20px',
-                    padding: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
-                  }}
-                >
-                  <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                    💎 {gift.price_ton}
-                  </div>
-                  <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                  <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
                 </div>
               ))}
             </div>
@@ -684,7 +725,7 @@ export default function App() {
             {/* СПИСОК МЕТОДОВ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {/* 1. Gifts (сразу переводит на диалог с банком без промежуточных окон!) */}
+                {/* 1. Gifts */}
                 <div
                   onClick={handleOpenBankChat}
                   style={{
@@ -804,7 +845,6 @@ export default function App() {
                   Курс конвертации: <b>111 ★ = 1.00 TON</b>
                 </p>
 
-                {/* Поле ввода без стрелок инкремента */}
                 <div style={{ marginBottom: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
                   <input
                     type="text"
@@ -837,7 +877,6 @@ export default function App() {
                   ≈ {starsConvertedTon} TON на баланс
                 </div>
 
-                {/* Пресеты */}
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '18px' }}>
                   {[
                     { stars: 111, ton: '1.0' },
@@ -887,7 +926,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ВЫБОР СУММЫ ДЛЯ CRYPTOBOT (без белых стрелок) */}
+            {/* ВЫБОР СУММЫ ДЛЯ CRYPTOBOT */}
             {depositStep === 'cryptobot' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -898,7 +937,6 @@ export default function App() {
                   Введите сумму в TON для выставления счёта
                 </p>
 
-                {/* Поле ввода суммы без стрелок */}
                 <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
                   <input
                     type="text"
@@ -965,7 +1003,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ПОДКЛЮЧЕНИЕ TON КОШЕЛЬКА (без стрелок и без текста "Кошелек подключен: ...") */}
+            {/* ПОДКЛЮЧЕНИЕ TON КОШЕЛЬКА */}
             {depositStep === 'wallet' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', borderRadius: '14px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -1049,10 +1087,6 @@ export default function App() {
           zIndex: 50,
         }}
       >
-        <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
-          <img src={ICONS.gift} alt="Инвентарь" style={{ width: '20px', height: '20px', filter: 'invert(1)' }} />
-        </button>
-
         <button
           onClick={() => setActiveTab('upgrade')}
           style={{
@@ -1073,7 +1107,15 @@ export default function App() {
           ▲
         </button>
 
-        <button onClick={() => setActiveTab('shop')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'shop' ? 1 : 0.4 }}>
+        <button
+          onClick={() => setActiveTab('shop')}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            opacity: activeTab === 'shop' ? 1 : 0.4,
+          }}
+        >
           <span style={{ fontSize: '20px' }}>🛒</span>
         </button>
       </div>
