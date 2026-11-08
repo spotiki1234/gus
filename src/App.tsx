@@ -10,6 +10,7 @@ const ICONS = {
   stars: '/icons/stars.png',
   ton: '/icons/ton.png',
   cryptobot: '/icons/cryptobot.png',
+  upgradeArrow: '/icons/upgrade-arrow.png',
 };
 
 interface TgUser {
@@ -51,7 +52,7 @@ interface BankGift {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'upgrade' | 'shop' | 'inventory'>('upgrade');
+  const [activeTab, setActiveTab] = useState<'upgrade' | 'shop'>('upgrade');
 
   const [tgUser] = useState<TgUser>(() => {
     return (
@@ -313,7 +314,7 @@ export default function App() {
         color: '#fff',
         minHeight: '100vh',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        paddingBottom: '90px',
+        paddingBottom: '100px',
         zoom: 0.91,
       }}
     >
@@ -400,47 +401,9 @@ export default function App() {
         </div>
       </div>
 
-      {/* Верхний таб-бар переключения */}
-      <div style={{ padding: '14px 18px 8px 18px', display: 'flex', gap: '10px' }}>
-        <button
-          onClick={() => setActiveTab('upgrade')}
-          style={{
-            flex: 1,
-            padding: '11px',
-            borderRadius: '18px',
-            border: 'none',
-            fontWeight: '700',
-            fontSize: '13px',
-            background: activeTab === 'upgrade' ? '#eab308' : '#171126',
-            color: activeTab === 'upgrade' ? '#000' : '#8b7fa8',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          Апгрейд
-        </button>
-        <button
-          onClick={() => setActiveTab('shop')}
-          style={{
-            flex: 1,
-            padding: '11px',
-            borderRadius: '18px',
-            border: 'none',
-            fontWeight: '700',
-            fontSize: '13px',
-            background: activeTab === 'shop' ? '#eab308' : '#171126',
-            color: activeTab === 'shop' ? '#000' : '#8b7fa8',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          Магазин ({bankVault.length})
-        </button>
-      </div>
-
       {/* АРЕНА АПГРЕЙДА (С ИНВЕНТАРЕМ ПОД КНОПКОЙ «УЛУЧШИТЬ») */}
       {activeTab === 'upgrade' && (
-        <div style={{ padding: '10px 18px' }}>
+        <div style={{ padding: '16px 18px 10px 18px' }}>
           <div style={{ background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
             
             {/* Круговая рулетка */}
@@ -641,7 +604,10 @@ export default function App() {
 
       {/* МАГАЗИН БАНКА */}
       {activeTab === 'shop' && (
-        <div style={{ padding: '10px 18px' }}>
+        <div style={{ padding: '16px 18px 10px 18px' }}>
+          <div style={{ fontSize: '17px', fontWeight: '800', marginBottom: '14px' }}>
+            Магазин банка ({bankVault.length})
+          </div>
           {bankVault.length === 0 ? (
             <div style={{ background: '#171126', borderRadius: '24px', padding: '32px 18px', textAlign: 'center', border: '1px solid #271c47' }}>
               <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -725,7 +691,6 @@ export default function App() {
             {/* СПИСОК МЕТОДОВ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {/* 1. Gifts */}
                 <div
                   onClick={handleOpenBankChat}
                   style={{
@@ -751,7 +716,6 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 2. Telegram Stars */}
                 <div
                   onClick={() => setDepositStep('stars')}
                   style={{
@@ -777,7 +741,6 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 3. TON Connect */}
                 <div
                   onClick={() => setDepositStep('wallet')}
                   style={{
@@ -803,7 +766,6 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 4. CryptoBot */}
                 <div
                   onClick={() => {
                     setDepositStep('cryptobot');
@@ -1070,7 +1032,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (С КРУГЛОЙ КНОПКОЙ ПОСЕРЕДИНЕ) */}
       <div
         style={{
           position: 'fixed',
@@ -1083,40 +1045,79 @@ export default function App() {
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          padding: '10px 18px',
+          padding: '8px 18px',
           zIndex: 50,
         }}
       >
+        {/* Кнопка быстрого перехода в диалог с банком (подарки) */}
         <button
-          onClick={() => setActiveTab('upgrade')}
-          style={{
-            width: '58px',
-            height: '38px',
-            borderRadius: '20px',
-            background: activeTab === 'upgrade' ? '#eab308' : '#231a3b',
-            color: activeTab === 'upgrade' ? '#000' : '#8b7fa8',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '18px',
-            fontWeight: '900',
-            cursor: 'pointer',
-          }}
-        >
-          ▲
-        </button>
-
-        <button
-          onClick={() => setActiveTab('shop')}
+          onClick={handleOpenBankChat}
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            opacity: activeTab === 'shop' ? 1 : 0.4,
+            opacity: 0.7,
+            padding: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          <span style={{ fontSize: '20px' }}>🛒</span>
+          <img src={ICONS.gift} alt="Gifts" style={{ width: '22px', height: '22px', filter: 'invert(1)' }} />
+        </button>
+
+        {/* КРУГЛАЯ ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА С ВАШИМ ЛОГОТИПОМ СТРЕЛКИ */}
+        <button
+          onClick={() => {
+            setActiveTab('upgrade');
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+          }}
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            background: activeTab === 'upgrade' ? '#171126' : '#130d24',
+            border: activeTab === 'upgrade' ? '2.5px solid #eab308' : '1.5px solid #3b2d6b',
+            boxShadow: activeTab === 'upgrade' ? '0 0 16px rgba(234, 179, 8, 0.45)' : '0 2px 8px rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            transform: 'translateY(-6px)',
+            transition: 'all 0.2s',
+          }}
+        >
+          <img
+            src={ICONS.upgradeArrow}
+            alt="Апгрейд"
+            style={{
+              width: '32px',
+              height: '32px',
+              objectFit: 'contain',
+              display: 'block',
+            }}
+          />
+        </button>
+
+        {/* Кнопка магазина */}
+        <button
+          onClick={() => {
+            setActiveTab('shop');
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            opacity: activeTab === 'shop' ? 1 : 0.45,
+            padding: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <span style={{ fontSize: '22px' }}>🛒</span>
         </button>
       </div>
     </div>
