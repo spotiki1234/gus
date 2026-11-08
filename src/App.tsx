@@ -4,6 +4,9 @@ import confetti from 'canvas-confetti';
 
 const RECEIVER_TON_ADDRESS = 'UQAKTkSiwZWqUDUjlydR0fxQPaPfsHbNRn0kvy8tcJwKzkrT';
 
+// Курс конвертации звёзд в TON
+const STARS_PER_TON = 111;
+
 // Пути к официальным логотипам
 const ICONS = {
   gift: '/icons/gift.png',
@@ -56,8 +59,8 @@ export default function App() {
     return window.Telegram?.WebApp?.initDataUnsafe?.user || { first_name: 'Пользователь', id: 0 };
   });
 
+  // Единый баланс только в TON
   const [balanceTon, setBalanceTon] = useState<number>(0.0);
-  const [balanceStars, setBalanceStars] = useState<number>(0);
 
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
@@ -72,7 +75,7 @@ export default function App() {
   const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'gifts' | 'cryptobot'>('methods');
   const [tonAmountInput, setTonAmountInput] = useState('1.0');
   const [cryptoPayAmount, setCryptoPayAmount] = useState('1.0');
-  const [starsToBuy, setStarsToBuy] = useState(100);
+  const [starsToBuy, setStarsToBuy] = useState(111); // По умолчанию 1 TON
 
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
@@ -87,14 +90,11 @@ export default function App() {
     if (tgUser.id) {
       fetch(`/api/user-balance?userId=${tgUser.id}`)
         .then((res) => res.json())
-        .then((data: { stars?: number; ton?: number }) => {
-          if (typeof data.stars === 'number') setBalanceStars(data.stars);
+        .then((data: { ton?: number }) => {
           if (typeof data.ton === 'number') setBalanceTon(data.ton);
         })
         .catch(() => {
-          const s = localStorage.getItem(`stars_${tgUser.id}`);
           const t = localStorage.getItem(`ton_${tgUser.id}`);
-          if (s) setBalanceStars(parseInt(s, 10));
           if (t) setBalanceTon(parseFloat(t));
         });
 
@@ -114,10 +114,8 @@ export default function App() {
       .catch(() => {});
   }, [tgUser.id]);
 
-  const saveBalanceToDb = async (newStars: number, newTon: number) => {
-    setBalanceStars(newStars);
+  const saveBalanceToDb = async (newTon: number) => {
     setBalanceTon(newTon);
-    localStorage.setItem(`stars_${tgUser.id}`, String(newStars));
     localStorage.setItem(`ton_${tgUser.id}`, String(newTon));
 
     try {
@@ -126,8 +124,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: tgUser.id,
-          stars: newStars,
           ton: newTon,
+          stars: 0,
         }),
       });
     } catch (e) {
@@ -176,7 +174,8 @@ export default function App() {
     }, 3200);
   };
 
-  const handleRealStarsPayment = async (amount: number) => {
+  // Оплата звёздами с зачислением в TON (111 Stars = 1 TON)
+  const handleRealStarsPayment = async (amountStars: number) => {
     const tg = window.Telegram?.WebApp;
     if (!tg) {
       alert('Откройте приложение внутри Telegram');
@@ -190,7 +189,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          starsAmount: amount,
+          starsAmount: amountStars,
           userId: tgUser.id,
         }),
       });
@@ -208,9 +207,13 @@ export default function App() {
             tg.HapticFeedback?.notificationOccurred('success');
             confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
 
-            const newStars = balanceStars + amount;
-            saveBalanceToDb(newStars, balanceTon);
+            // Переводим оплаченные звёзды в TON
+            const addedTon = Number((amountStars / STARS_PER_TON).toFixed(2));
+            const newTon = Number((balanceTon + addedTon).toFixed(2));
+            saveBalanceToDb(newTon);
+
             setIsDepositOpen(false);
+            alert(`✅ Баланс успешно пополнен на +${addedTon} TON!`);
           }
         });
       }
@@ -245,7 +248,7 @@ export default function App() {
     try {
       await tonConnectUI.sendTransaction(transaction);
       const newTon = Number((balanceTon + parseFloat(tonAmountInput)).toFixed(2));
-      saveBalanceToDb(balanceStars, newTon);
+      saveBalanceToDb(newTon);
 
       setIsDepositOpen(false);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
@@ -290,6 +293,9 @@ export default function App() {
     }
   };
 
+  // Расчет эквивалента в TON для поля Stars
+  const starsConvertedTon = (starsToBuy / STARS_PER_TON).toFixed(2);
+
   return (
     <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', paddingBottom: '100px' }}>
       {/* Шапка профиля */}
@@ -299,14 +305,14 @@ export default function App() {
           <div style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600', marginTop: '2px' }}>Хранилище @GuseBank</div>
         </div>
 
-        {/* Плашка баланса */}
+        {/* Единственная плашка баланса TON */}
         <div 
           onClick={() => { setIsDepositOpen(true); setDepositStep('methods'); }} 
           style={{ 
             background: 'linear-gradient(135deg, #1f163d 0%, #150f29 100%)', 
             border: '1px solid #3b2d6b', 
             borderRadius: '24px', 
-            padding: '6px 14px', 
+            padding: '8px 16px', 
             display: 'flex', 
             alignItems: 'center', 
             gap: '10px', 
@@ -314,15 +320,9 @@ export default function App() {
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
           }}
         >
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: '800', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
-              {balanceTon.toFixed(2)} TON
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-              <img src={ICONS.stars} alt="Stars" style={{ width: '12px', height: '12px' }} />
-              {balanceStars} Stars
-            </div>
+          <div style={{ fontSize: '14px', fontWeight: '900', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <img src={ICONS.ton} alt="TON" style={{ width: '16px', height: '16px', borderRadius: '4px' }} />
+            {balanceTon.toFixed(2)} TON
           </div>
           <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#eab308', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '14px' }}>+</div>
         </div>
@@ -372,7 +372,7 @@ export default function App() {
           <div style={{ background: '#130e24', borderRadius: '28px', border: '1px solid #271c47', padding: '24px 16px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '800' }}>Арена Апгрейда</h3>
 
-            {/* Круговая неоновая рулетка */}
+            {/* Рулетка */}
             <div style={{ position: 'relative', width: '150px', height: '150px', margin: '0 auto 20px auto' }}>
               <div
                 style={{
@@ -538,7 +538,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) С РЕАЛЬНЫМИ ЛОГОТИПАМИ */}
+      {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) */}
       {isDepositOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '24px 20px 40px 20px', borderTop: '1px solid #302257', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -551,7 +551,7 @@ export default function App() {
                 <div style={{ fontSize: '17px', fontWeight: '800' }}>
                   {depositStep === 'methods' && 'Способ пополнения'}
                   {depositStep === 'wallet' && 'Пополнение через TON'}
-                  {depositStep === 'stars' && 'Покупка звёздами'}
+                  {depositStep === 'stars' && 'Оплата звёздами'}
                   {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
                   {depositStep === 'gifts' && 'Пополнение подарком'}
                 </div>
@@ -559,7 +559,7 @@ export default function App() {
               <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
             </div>
 
-            {/* СПИСОК МЕТОДОВ (С ОФИЦИАЛЬНЫМИ ИКОНКАМИ) */}
+            {/* СПИСОК МЕТОДОВ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 
@@ -585,7 +585,7 @@ export default function App() {
                     </div>
                     <div>
                       <div style={{ fontWeight: '800', fontSize: '15px' }}>Telegram Stars</div>
-                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Мгновенная нативная оплата</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Курс: 111 звёзд = 1.00 TON</div>
                     </div>
                   </div>
                   <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
@@ -619,6 +619,100 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
                 </div>
 
+              </div>
+            )}
+
+            {/* ВЫБОР СУММЫ ДЛЯ STARS (КОНВЕРТАЦИЯ 111 = 1 TON) */}
+            {depositStep === 'stars' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ICONS.stars} alt="Stars" style={{ width: '64px', height: '64px' }} />
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800' }}>Оплата звёздами</div>
+                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
+                  Курс конвертации: <b>111 ★ = 1.00 TON</b>
+                </p>
+
+                {/* Поле ввода звёзд */}
+                <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100000"
+                    value={starsToBuy || ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setStarsToBuy(isNaN(val) ? 0 : Math.max(0, val));
+                    }}
+                    placeholder="0"
+                    style={{
+                      width: '160px',
+                      background: '#171126',
+                      border: '2px solid #fbbf24',
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontSize: '32px',
+                      fontWeight: '900',
+                      color: '#fbbf24',
+                      textAlign: 'center',
+                      outline: 'none',
+                    }}
+                  />
+                  <img src={ICONS.stars} alt="★" style={{ width: '28px', height: '28px' }} />
+                </div>
+
+                {/* Эквивалент в TON */}
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#0098ea', marginBottom: '18px' }}>
+                  ≈ {starsConvertedTon} TON на баланс
+                </div>
+
+                {/* Быстрые пресеты */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                  {[
+                    { stars: 111, ton: '1.0' },
+                    { stars: 555, ton: '5.0' },
+                    { stars: 1110, ton: '10.0' },
+                    { stars: 2775, ton: '25.0' },
+                  ].map((p) => (
+                    <button
+                      key={p.stars}
+                      onClick={() => setStarsToBuy(p.stars)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 4px',
+                        borderRadius: '14px',
+                        border: 'none',
+                        background: starsToBuy === p.stars ? '#fbbf24' : '#1b1436',
+                        color: starsToBuy === p.stars ? '#000' : '#fff',
+                        fontWeight: '800',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.stars} ★<br />
+                      <span style={{ fontSize: '10px', opacity: 0.8 }}>({p.ton} TON)</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  disabled={!starsToBuy || starsToBuy <= 0}
+                  onClick={() => handleRealStarsPayment(starsToBuy)}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: starsToBuy > 0 ? '#eab308' : '#33294d',
+                    color: starsToBuy > 0 ? '#000' : '#736b8a',
+                    fontWeight: '800',
+                    fontSize: '16px',
+                    cursor: starsToBuy > 0 ? 'pointer' : 'not-allowed',
+                    boxShadow: starsToBuy > 0 ? '0 4px 20px rgba(234, 179, 8, 0.4)' : 'none',
+                  }}
+                >
+                  Заплатить {starsToBuy || 0} ★ (+{starsConvertedTon} TON)
+                </button>
               </div>
             )}
 
@@ -693,87 +787,6 @@ export default function App() {
                   }}
                 >
                   Перейти к оплате {cryptoPayAmount} TON
-                </button>
-              </div>
-            )}
-
-            {/* ВЫБОР И РУЧНОЙ ВВОД STARS */}
-            {depositStep === 'stars' && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img src={ICONS.stars} alt="Stars" style={{ width: '64px', height: '64px' }} />
-                </div>
-                <div style={{ fontSize: '18px', fontWeight: '800' }}>Покупка через Stars</div>
-                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
-                  Введите сумму или выберите быстрый вариант
-                </p>
-
-                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100000"
-                    value={starsToBuy || ''}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setStarsToBuy(isNaN(val) ? 0 : Math.max(0, val));
-                    }}
-                    placeholder="0"
-                    style={{
-                      width: '160px',
-                      background: '#171126',
-                      border: '2px solid #fbbf24',
-                      borderRadius: '16px',
-                      padding: '10px 14px',
-                      fontSize: '32px',
-                      fontWeight: '900',
-                      color: '#fbbf24',
-                      textAlign: 'center',
-                      outline: 'none',
-                    }}
-                  />
-                  <img src={ICONS.stars} alt="★" style={{ width: '28px', height: '28px' }} />
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-                  {[50, 100, 500, 1000].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => setStarsToBuy(val)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 0',
-                        borderRadius: '14px',
-                        border: 'none',
-                        background: starsToBuy === val ? '#fbbf24' : '#1b1436',
-                        color: starsToBuy === val ? '#000' : '#fff',
-                        fontWeight: '800',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {val} ★
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  disabled={!starsToBuy || starsToBuy <= 0}
-                  onClick={() => handleRealStarsPayment(starsToBuy)}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    borderRadius: '20px',
-                    border: 'none',
-                    background: starsToBuy > 0 ? '#eab308' : '#33294d',
-                    color: starsToBuy > 0 ? '#000' : '#736b8a',
-                    fontWeight: '800',
-                    fontSize: '16px',
-                    cursor: starsToBuy > 0 ? 'pointer' : 'not-allowed',
-                    boxShadow: starsToBuy > 0 ? '0 4px 20px rgba(234, 179, 8, 0.4)' : 'none',
-                  }}
-                >
-                  Купить {starsToBuy || 0} Stars
                 </button>
               </div>
             )}
