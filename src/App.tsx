@@ -61,7 +61,7 @@ export default function App() {
 
   // Шторка пополнения
   const [isDepositOpen, setIsDepositOpen] = useState(false);
-  const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'gifts' | 'cryptobot' | 'xrocket'>('methods');
+  const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'gifts' | 'cryptobot'>('methods');
   const [tonAmountInput, setTonAmountInput] = useState('1.0');
   const [cryptoPayAmount, setCryptoPayAmount] = useState('1.0');
   const [starsToBuy, setStarsToBuy] = useState(100);
@@ -249,7 +249,7 @@ export default function App() {
     }
   };
 
-  // Оплата через CryptoBot с выбранной суммой
+  // Оплата через CryptoBot
   const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
     const amount = parseFloat(cryptoPayAmount);
@@ -282,41 +282,6 @@ export default function App() {
       alert('Ошибка соединения с сервисом платежей');
     }
   };
-
-  // Оплата через xRocket с выбранной суммой
-  const handleXRocketPayment = async () => {
-    const tg = window.Telegram?.WebApp;
-    const amount = parseFloat(cryptoPayAmount);
-    if (isNaN(amount) || amount <= 0) {
-      alert('Введите корректную сумму');
-      return;
-    }
-
-    tg?.HapticFeedback?.impactOccurred('light');
-
-    try {
-      const res = await fetch('/api/pay-xrocket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountTon: amount, userId: tgUser.id }),
-      });
-
-      const data = await res.json();
-      if (data.invoiceUrl) {
-        setIsDepositOpen(false);
-        if (tg?.openTelegramLink) {
-          tg.openTelegramLink(data.invoiceUrl);
-        } else {
-          window.open(data.invoiceUrl, '_blank');
-        }
-      } else {
-        alert('Ошибка создания счета: ' + (data.error || 'Проверьте токен'));
-      }
-    } catch {
-      alert('Ошибка соединения с сервисом платежей');
-    }
-  };
-
 
   return (
     <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '100px' }}>
@@ -546,13 +511,12 @@ export default function App() {
                 {depositStep === 'wallet' && 'Пополнение через TON'}
                 {depositStep === 'stars' && 'Покупка звёздами'}
                 {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
-                {depositStep === 'xrocket' && 'Пополнение xRocket'}
                 {depositStep === 'gifts' && 'Пополнение подарком'}
               </div>
               <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
             </div>
 
-            {/* СПИСОК МЕТОДОВ */}
+            {/* СПИСОК МЕТОДОВ (ТОЛЬКО GIFTS, STARS, TON CONNECT И CRYPTOBOT) */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div onClick={() => setDepositStep('gifts')} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
@@ -583,14 +547,6 @@ export default function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ fontSize: '24px' }}>🤖</span>
                     <span style={{ fontWeight: '700' }}>CryptoBot</span>
-                  </div>
-                  <span>›</span>
-                </div>
-
-                <div onClick={() => { setDepositStep('xrocket'); setCryptoPayAmount('1.0'); }} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px' }}>🚀</span>
-                    <span style={{ fontWeight: '700' }}>xRocket</span>
                   </div>
                   <span>›</span>
                 </div>
@@ -659,79 +615,6 @@ export default function App() {
                     borderRadius: '20px',
                     border: 'none',
                     background: '#0098ea',
-                    color: '#fff',
-                    fontWeight: '800',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Перейти к оплате {cryptoPayAmount} TON
-                </button>
-              </div>
-            )}
-
-            {/* ВЫБОР СУММЫ ДЛЯ XROCKET */}
-            {depositStep === 'xrocket' && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '46px', marginBottom: '8px' }}>🚀</div>
-                <div style={{ fontSize: '18px', fontWeight: '800' }}>Пополнение через xRocket</div>
-                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
-                  Введите сумму в TON для выставления счёта
-                </p>
-
-                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={cryptoPayAmount}
-                    onChange={(e) => setCryptoPayAmount(e.target.value)}
-                    style={{
-                      width: '160px',
-                      background: '#171126',
-                      border: '2px solid #a855f7',
-                      borderRadius: '16px',
-                      padding: '10px 14px',
-                      fontSize: '32px',
-                      fontWeight: '900',
-                      color: '#a855f7',
-                      textAlign: 'center',
-                      outline: 'none',
-                    }}
-                  />
-                  <span style={{ fontSize: '24px', color: '#a855f7', fontWeight: '800' }}>TON</span>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-                  {['0.5', '1.0', '5.0', '10.0'].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => setCryptoPayAmount(val)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 0',
-                        borderRadius: '14px',
-                        border: 'none',
-                        background: cryptoPayAmount === val ? '#a855f7' : '#1b1436',
-                        color: cryptoPayAmount === val ? '#fff' : '#8b7fa8',
-                        fontWeight: '800',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {val} TON
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleXRocketPayment}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    borderRadius: '20px',
-                    border: 'none',
-                    background: '#a855f7',
                     color: '#fff',
                     fontWeight: '800',
                     fontSize: '16px',
@@ -879,7 +762,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ НАВИГАЦИЯ */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(11, 8, 19, 0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid #23193d', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 20px', zIndex: 50 }}>
         <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
           <span style={{ fontSize: '22px' }}>🎁</span>
