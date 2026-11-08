@@ -401,11 +401,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* АРЕНА АПГРЕЙДА (С ИНВЕНТАРЕМ ПОД КНОПКОЙ «УЛУЧШИТЬ») */}
+      {/* АРЕНА АПГРЕЙДА */}
       {activeTab === 'upgrade' && (
         <div style={{ padding: '16px 18px 10px 18px' }}>
           <div style={{ background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-            
             {/* Круговая рулетка */}
             <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 18px auto' }}>
               <div
@@ -471,8 +470,12 @@ export default function App() {
 
               <div style={{ fontSize: '18px', color: '#8b7fa8', fontWeight: '900' }}>➔</div>
 
+              {/* Правый слот: цель апгрейда */}
               <div
-                onClick={() => setActiveTab('shop')}
+                onClick={() => {
+                  setActiveTab('shop');
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                }}
                 style={{
                   width: '110px',
                   height: '120px',
@@ -494,7 +497,7 @@ export default function App() {
                     <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedTarget.price_ton}</span>
                   </>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>+ Цель банка</span>
+                  <span style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700' }}>Цель</span>
                 )}
               </div>
             </div>
@@ -521,14 +524,18 @@ export default function App() {
             </button>
           </div>
 
-          {/* ИНВЕНТАРЬ ПОЛЬЗОВАТЕЛЯ ПРЯМО ПОД КНОПКОЙ «УЛУЧШИТЬ» */}
+          {/* ИНВЕНТАРЬ ПОЛЬЗОВАТЕЛЯ ПОД КНОПКОЙ «УЛУЧШИТЬ» */}
           <div style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>
                 Мой инвентарь ({userInventory.length})
               </div>
+              {/* Кнопка «Пополнить» */}
               <button
-                onClick={handleOpenBankChat}
+                onClick={() => {
+                  setIsDepositOpen(true);
+                  setDepositStep('methods');
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -538,10 +545,11 @@ export default function App() {
                   cursor: 'pointer',
                 }}
               >
-                + Пополнить подарком
+                Пополнить
               </button>
             </div>
 
+            {/* Если инвентарь пуст — карточка перенаправляет в магазин */}
             {userInventory.length === 0 ? (
               <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
                 <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -549,10 +557,13 @@ export default function App() {
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
                 <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 12px 0' }}>
-                  Отправьте NFT-подарок на <b>@GuseBank</b> — он сразу появится здесь для улучшения
+                  Выберите подарок на витрине магазина или отправьте NFT в Банк
                 </p>
                 <button
-                  onClick={handleOpenBankChat}
+                  onClick={() => {
+                    setActiveTab('shop');
+                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  }}
                   style={{
                     background: '#a855f7',
                     color: '#fff',
@@ -564,7 +575,7 @@ export default function App() {
                     cursor: 'pointer',
                   }}
                 >
-                  Передать подарок в Банк
+                  Перейти в магазин
                 </button>
               </div>
             ) : (
@@ -1032,7 +1043,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (С КРУГЛОЙ КНОПКОЙ ПОСЕРЕДИНЕ) */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div
         style={{
           position: 'fixed',
@@ -1049,7 +1060,6 @@ export default function App() {
           zIndex: 50,
         }}
       >
-        {/* Кнопка быстрого перехода в диалог с банком (подарки) */}
         <button
           onClick={handleOpenBankChat}
           style={{
@@ -1066,7 +1076,6 @@ export default function App() {
           <img src={ICONS.gift} alt="Gifts" style={{ width: '22px', height: '22px', filter: 'invert(1)' }} />
         </button>
 
-        {/* КРУГЛАЯ ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА С ВАШИМ ЛОГОТИПОМ СТРЕЛКИ */}
         <button
           onClick={() => {
             setActiveTab('upgrade');
@@ -1100,7 +1109,6 @@ export default function App() {
           />
         </button>
 
-        {/* Кнопка магазина */}
         <button
           onClick={() => {
             setActiveTab('shop');
