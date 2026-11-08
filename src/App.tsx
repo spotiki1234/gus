@@ -67,9 +67,18 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Статистика выведенных предметов
-  const [withdrawnCount, setWithdrawnCount] = useState<number>(0);
-  const [withdrawnTotalTon, setWithdrawnTotalTon] = useState<number>(0.0);
+  // Статистика выведенных предметов: считываем из localStorage прямо при инициализации (без синхронного setState в useEffect)
+  const [withdrawnCount] = useState<number>(() => {
+    const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+    const saved = localStorage.getItem(`withdrawn_count_${userId}`);
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  const [withdrawnTotalTon] = useState<number>(() => {
+    const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+    const saved = localStorage.getItem(`withdrawn_total_${userId}`);
+    return saved ? parseFloat(saved) : 0.0;
+  });
 
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
@@ -111,12 +120,6 @@ export default function App() {
           if (data.items) setUserInventory(data.items);
         })
         .catch(() => {});
-
-      // Загрузка статистики выводов пользователя
-      const savedWithdrawnCount = localStorage.getItem(`withdrawn_count_${tgUser.id}`);
-      const savedWithdrawnTotal = localStorage.getItem(`withdrawn_total_${tgUser.id}`);
-      if (savedWithdrawnCount) setWithdrawnCount(parseInt(savedWithdrawnCount, 10));
-      if (savedWithdrawnTotal) setWithdrawnTotalTon(parseFloat(savedWithdrawnTotal));
     }
 
     fetch('/api/bank-gifts')
@@ -316,7 +319,6 @@ export default function App() {
     }
   };
 
-  // Отключение кошелька
   const handleDisconnectWallet = async () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     try {
