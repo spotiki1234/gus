@@ -4,6 +4,14 @@ import confetti from 'canvas-confetti';
 
 const RECEIVER_TON_ADDRESS = 'UQAKTkSiwZWqUDUjlydR0fxQPaPfsHbNRn0kvy8tcJwKzkrT';
 
+// Пути к официальным логотипам
+const ICONS = {
+  gift: '/icons/gift.png',
+  stars: '/icons/stars.png',
+  ton: '/icons/ton.png',
+  cryptobot: '/icons/cryptobot.png',
+};
+
 interface TgUser {
   id: number;
   first_name: string;
@@ -98,7 +106,7 @@ export default function App() {
         .catch(() => {});
     }
 
-    fetch('/api/bank/gifts')
+    fetch('/api/bank-gifts')
       .then((res) => res.json())
       .then((data: { available_gifts?: BankGift[] }) => {
         if (data.available_gifts) setBankVault(data.available_gifts);
@@ -249,7 +257,6 @@ export default function App() {
     }
   };
 
-  // Оплата через CryptoBot
   const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
     const amount = parseFloat(cryptoPayAmount);
@@ -284,20 +291,40 @@ export default function App() {
   };
 
   return (
-    <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '100px' }}>
+    <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', paddingBottom: '100px' }}>
       {/* Шапка профиля */}
       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#120d24', borderBottom: '1px solid #23193d' }}>
         <div>
-          <div style={{ fontWeight: '700', fontSize: '15px' }}>{tgUser.first_name}</div>
-          <div style={{ fontSize: '11px', color: '#9333ea', fontWeight: '600' }}>Хранилище @GuseBank</div>
+          <div style={{ fontWeight: '800', fontSize: '16px', letterSpacing: '-0.3px' }}>{tgUser.first_name}</div>
+          <div style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600', marginTop: '2px' }}>Хранилище @GuseBank</div>
         </div>
 
-        <div onClick={() => { setIsDepositOpen(true); setDepositStep('methods'); }} style={{ background: '#1d1538', border: '1px solid #3b2d6b', borderRadius: '24px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+        {/* Плашка баланса */}
+        <div 
+          onClick={() => { setIsDepositOpen(true); setDepositStep('methods'); }} 
+          style={{ 
+            background: 'linear-gradient(135deg, #1f163d 0%, #150f29 100%)', 
+            border: '1px solid #3b2d6b', 
+            borderRadius: '24px', 
+            padding: '6px 14px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px', 
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+        >
           <div>
-            <div style={{ fontSize: '13px', fontWeight: '800', color: '#0098ea' }}>💎 {balanceTon.toFixed(2)} TON</div>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: '#fbbf24' }}>⭐ {balanceStars} Stars</div>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
+              {balanceTon.toFixed(2)} TON
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+              <img src={ICONS.stars} alt="Stars" style={{ width: '12px', height: '12px' }} />
+              {balanceStars} Stars
+            </div>
           </div>
-          <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#eab308', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>+</div>
+          <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#eab308', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '14px' }}>+</div>
         </div>
       </div>
 
@@ -311,9 +338,11 @@ export default function App() {
             borderRadius: '20px',
             border: 'none',
             fontWeight: '700',
+            fontSize: '14px',
             background: activeTab === 'inventory' ? '#eab308' : '#171126',
             color: activeTab === 'inventory' ? '#000' : '#8b7fa8',
             cursor: 'pointer',
+            transition: 'all 0.2s',
           }}
         >
           Мои подарки ({userInventory.length})
@@ -326,9 +355,11 @@ export default function App() {
             borderRadius: '20px',
             border: 'none',
             fontWeight: '700',
+            fontSize: '14px',
             background: activeTab === 'shop' ? '#eab308' : '#171126',
             color: activeTab === 'shop' ? '#000' : '#8b7fa8',
             cursor: 'pointer',
+            transition: 'all 0.2s',
           }}
         >
           Магазин ({bankVault.length})
@@ -338,10 +369,10 @@ export default function App() {
       {/* АРЕНА АПГРЕЙДА */}
       {activeTab === 'upgrade' && (
         <div style={{ padding: '10px 20px' }}>
-          <div style={{ background: '#130e24', borderRadius: '28px', border: '1px solid #271c47', padding: '24px 16px', textAlign: 'center' }}>
+          <div style={{ background: '#130e24', borderRadius: '28px', border: '1px solid #271c47', padding: '24px 16px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '800' }}>Арена Апгрейда</h3>
 
-            {/* Рулетка */}
+            {/* Круговая неоновая рулетка */}
             <div style={{ position: 'relative', width: '150px', height: '150px', margin: '0 auto 20px auto' }}>
               <div
                 style={{
@@ -349,14 +380,15 @@ export default function App() {
                   height: '100%',
                   borderRadius: '50%',
                   background: chance > 0 ? `conic-gradient(#a855f7 0% ${chance}%, #1f1738 ${chance}% 100%)` : '#1f1738',
+                  boxShadow: '0 0 20px rgba(168, 85, 247, 0.25)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 <div style={{ width: '110px', height: '110px', borderRadius: '50%', background: '#090514', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: '22px', fontWeight: '900', color: chance > 0 ? '#c084fc' : '#5b4d7a' }}>{chance}%</div>
-                  <span style={{ fontSize: '10px', color: '#8b7fa8' }}>ШАНС</span>
+                  <div style={{ fontSize: '24px', fontWeight: '900', color: chance > 0 ? '#c084fc' : '#5b4d7a' }}>{chance}%</div>
+                  <span style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700' }}>ШАНС</span>
                 </div>
               </div>
 
@@ -372,7 +404,7 @@ export default function App() {
                   pointerEvents: 'none',
                 }}
               >
-                <div style={{ width: '4px', height: '22px', background: '#eab308', margin: '0 auto', borderRadius: '4px' }} />
+                <div style={{ width: '4px', height: '22px', background: '#eab308', margin: '0 auto', borderRadius: '4px', boxShadow: '0 0 12px #eab308' }} />
               </div>
             </div>
 
@@ -386,14 +418,14 @@ export default function App() {
                   <>
                     <img src={selectedSource.image_url} alt="" style={{ width: '46px', height: '46px', objectFit: 'contain' }} />
                     <span style={{ fontSize: '12px', fontWeight: '800', marginTop: '6px' }}>{selectedSource.name}</span>
-                    <span style={{ fontSize: '10px', color: '#0098ea' }}>💎 {selectedSource.price_ton}</span>
+                    <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedSource.price_ton}</span>
                   </>
                 ) : (
-                  <span style={{ fontSize: '12px', color: '#8b7fa8' }}>+ Выбрать свой</span>
+                  <span style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '600' }}>+ Выбрать свой</span>
                 )}
               </div>
 
-              <div style={{ fontSize: '20px', color: '#8b7fa8' }}>➔</div>
+              <div style={{ fontSize: '20px', color: '#8b7fa8', fontWeight: '900' }}>➔</div>
 
               <div
                 onClick={() => setActiveTab('shop')}
@@ -403,10 +435,10 @@ export default function App() {
                   <>
                     <img src={selectedTarget.image_url} alt="" style={{ width: '46px', height: '46px', objectFit: 'contain' }} />
                     <span style={{ fontSize: '12px', fontWeight: '800', marginTop: '6px' }}>{selectedTarget.name}</span>
-                    <span style={{ fontSize: '10px', color: '#0098ea' }}>💎 {selectedTarget.price_ton}</span>
+                    <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedTarget.price_ton}</span>
                   </>
                 ) : (
-                  <span style={{ fontSize: '12px', color: '#8b7fa8' }}>+ Цель банка</span>
+                  <span style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '600' }}>+ Цель банка</span>
                 )}
               </div>
             </div>
@@ -424,6 +456,7 @@ export default function App() {
                 fontSize: '16px',
                 fontWeight: '800',
                 cursor: !selectedSource || !selectedTarget || isSpinning ? 'not-allowed' : 'pointer',
+                boxShadow: selectedSource && selectedTarget ? '0 4px 20px rgba(168, 85, 247, 0.4)' : 'none',
               }}
             >
               {isSpinning ? 'КРУТИМ РУЛЕТКУ...' : 'УЛУЧШИТЬ ПОДАРОК'}
@@ -437,8 +470,10 @@ export default function App() {
         <div style={{ padding: '10px 20px' }}>
           {bankVault.length === 0 ? (
             <div style={{ background: '#171126', borderRadius: '24px', padding: '36px 20px', textAlign: 'center', border: '1px solid #271c47' }}>
-              <div style={{ fontSize: '42px', marginBottom: '10px' }}>🏦</div>
-              <div style={{ fontSize: '15px', fontWeight: '700' }}>В банке пока нет доступных подарков</div>
+              <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img src={ICONS.gift} alt="Банк" style={{ width: '32px', height: '32px', filter: 'invert(1)' }} />
+              </div>
+              <div style={{ fontSize: '16px', fontWeight: '800' }}>В банке пока нет доступных подарков</div>
               <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '6px 0 16px 0' }}>
                 Подарки появятся здесь, как только они поступят на баланс <b>@GuseBank</b>
               </p>
@@ -469,8 +504,10 @@ export default function App() {
         <div style={{ padding: '10px 20px' }}>
           {userInventory.length === 0 ? (
             <div style={{ background: '#171126', borderRadius: '24px', padding: '36px 20px', textAlign: 'center', border: '1px solid #271c47' }}>
-              <div style={{ fontSize: '42px', marginBottom: '10px' }}>🎒</div>
-              <div style={{ fontSize: '15px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
+              <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img src={ICONS.gift} alt="Инвентарь" style={{ width: '32px', height: '32px', filter: 'invert(1)' }} />
+              </div>
+              <div style={{ fontSize: '16px', fontWeight: '800' }}>Ваш инвентарь пуст</div>
               <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '6px 0 16px 0' }}>
                 Отправьте свой NFT-подарок на <b>@GuseBank</b> в Telegram — он автоматически появится здесь!
               </p>
@@ -501,63 +538,97 @@ export default function App() {
         </div>
       )}
 
-      {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) */}
+      {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) С РЕАЛЬНЫМИ ЛОГОТИПАМИ */}
       {isDepositOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
-          <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '24px 20px 40px 20px', borderTop: '1px solid #302257' }}>
+          <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '24px 20px 40px 20px', borderTop: '1px solid #302257', maxHeight: '85vh', overflowY: 'auto' }}>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800' }}>
-                {depositStep === 'methods' && 'Способ пополнения'}
-                {depositStep === 'wallet' && 'Пополнение через TON'}
-                {depositStep === 'stars' && 'Покупка звёздами'}
-                {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
-                {depositStep === 'gifts' && 'Пополнение подарком'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {depositStep !== 'methods' && (
+                  <button onClick={() => setDepositStep('methods')} style={{ background: 'none', border: 'none', color: '#8b7fa8', fontSize: '18px', cursor: 'pointer' }}>←</button>
+                )}
+                <div style={{ fontSize: '17px', fontWeight: '800' }}>
+                  {depositStep === 'methods' && 'Способ пополнения'}
+                  {depositStep === 'wallet' && 'Пополнение через TON'}
+                  {depositStep === 'stars' && 'Покупка звёздами'}
+                  {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
+                  {depositStep === 'gifts' && 'Пополнение подарком'}
+                </div>
               </div>
-              <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
             </div>
 
-            {/* СПИСОК МЕТОДОВ (ТОЛЬКО GIFTS, STARS, TON CONNECT И CRYPTOBOT) */}
+            {/* СПИСОК МЕТОДОВ (С ОФИЦИАЛЬНЫМИ ИКОНКАМИ) */}
             {depositStep === 'methods' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div onClick={() => setDepositStep('gifts')} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px' }}>🎁</span>
-                    <span style={{ fontWeight: '700' }}>Gifts (Подарки на @GuseBank)</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                
+                {/* 1. Gifts */}
+                <div onClick={() => setDepositStep('gifts')} style={{ background: '#1b1436', padding: '14px 16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', border: '1px solid #2d2150' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#271c47', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={ICONS.gift} alt="Gifts" style={{ width: '22px', height: '22px', filter: 'invert(1)' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '15px' }}>Gifts</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Перевод подарка на @GuseBank</div>
+                    </div>
                   </div>
-                  <span>›</span>
+                  <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
                 </div>
 
-                <div onClick={() => setDepositStep('stars')} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px' }}>⭐</span>
-                    <span style={{ fontWeight: '700' }}>Telegram Stars</span>
+                {/* 2. Telegram Stars */}
+                <div onClick={() => setDepositStep('stars')} style={{ background: '#1b1436', padding: '14px 16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', border: '1px solid #2d2150' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#271c47', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={ICONS.stars} alt="Stars" style={{ width: '28px', height: '28px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '15px' }}>Telegram Stars</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Мгновенная нативная оплата</div>
+                    </div>
                   </div>
-                  <span>›</span>
+                  <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
                 </div>
 
-                <div onClick={() => setDepositStep('wallet')} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px' }}>💎</span>
-                    <span style={{ fontWeight: '700' }}>Ваш кошелек (TON Connect)</span>
+                {/* 3. TON Connect */}
+                <div onClick={() => setDepositStep('wallet')} style={{ background: '#1b1436', padding: '14px 16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', border: '1px solid #2d2150' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '38px', height: '38px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '15px' }}>Ваш кошелёк (TON Connect)</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Tonkeeper / Telegram Wallet</div>
+                    </div>
                   </div>
-                  <span>›</span>
+                  <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
                 </div>
 
-                <div onClick={() => { setDepositStep('cryptobot'); setCryptoPayAmount('1.0'); }} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '24px' }}>🤖</span>
-                    <span style={{ fontWeight: '700' }}>CryptoBot</span>
+                {/* 4. CryptoBot */}
+                <div onClick={() => { setDepositStep('cryptobot'); setCryptoPayAmount('1.0'); }} style={{ background: '#1b1436', padding: '14px 16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', border: '1px solid #2d2150' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={ICONS.cryptobot} alt="CryptoBot" style={{ width: '38px', height: '38px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '15px' }}>CryptoBot</div>
+                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>Чек в @CryptoBot (TON / USDT)</div>
+                    </div>
                   </div>
-                  <span>›</span>
+                  <span style={{ color: '#8b7fa8', fontSize: '20px' }}>›</span>
                 </div>
+
               </div>
             )}
 
             {/* ВЫБОР СУММЫ ДЛЯ CRYPTOBOT */}
             {depositStep === 'cryptobot' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '46px', marginBottom: '8px' }}>🤖</div>
-                <div style={{ fontSize: '18px', fontWeight: '800' }}>Пополнение через CryptoBot</div>
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', borderRadius: '18px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ICONS.cryptobot} alt="CryptoBot" style={{ width: '64px', height: '64px' }} />
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800' }}>Оплата через CryptoBot</div>
                 <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
                   Введите сумму в TON для выставления счёта
                 </p>
@@ -582,7 +653,7 @@ export default function App() {
                       outline: 'none',
                     }}
                   />
-                  <span style={{ fontSize: '24px', color: '#0098ea', fontWeight: '800' }}>TON</span>
+                  <span style={{ fontSize: '22px', color: '#0098ea', fontWeight: '800' }}>TON</span>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
@@ -629,7 +700,9 @@ export default function App() {
             {/* ВЫБОР И РУЧНОЙ ВВОД STARS */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '46px', marginBottom: '8px' }}>⭐</div>
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ICONS.stars} alt="Stars" style={{ width: '64px', height: '64px' }} />
+                </div>
                 <div style={{ fontSize: '18px', fontWeight: '800' }}>Покупка через Stars</div>
                 <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
                   Введите сумму или выберите быстрый вариант
@@ -659,7 +732,7 @@ export default function App() {
                       outline: 'none',
                     }}
                   />
-                  <span style={{ fontSize: '32px', color: '#fbbf24' }}>★</span>
+                  <img src={ICONS.stars} alt="★" style={{ width: '28px', height: '28px' }} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
@@ -708,6 +781,10 @@ export default function App() {
             {/* ПОДКЛЮЧЕНИЕ TON КОШЕЛЬКА */}
             {depositStep === 'wallet' && (
               <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', borderRadius: '16px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <img src={ICONS.ton} alt="TON" style={{ width: '64px', height: '64px' }} />
+                </div>
+                
                 <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
                   <TonConnectButton />
                 </div>
@@ -736,19 +813,21 @@ export default function App() {
                   </div>
                 ) : (
                   <p style={{ fontSize: '13px', color: '#8b7fa8' }}>
-                    Нажмите синюю кнопку выше, чтобы привязать Tonkeeper или Telegram Wallet
+                    Нажмите кнопку выше, чтобы привязать Tonkeeper или Telegram Wallet
                   </p>
                 )}
               </div>
             )}
 
-            {/* GIFTS */}
+            {/* ПЕРЕВОД ПОДАРКА (GIFTS) */}
             {depositStep === 'gifts' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '46px', marginBottom: '10px' }}>🎁</div>
-                <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '8px' }}>Перевод подарка в Банк</div>
-                <p style={{ fontSize: '13px', color: '#8b7fa8', margin: '0 0 16px 0' }}>
-                  Откройте контакт <b>@GuseBank</b> и отправьте ему подарок. Бэкенд автоматически добавит его в ваш инвентарь!
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 12px auto', borderRadius: '20px', background: '#20163d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ICONS.gift} alt="Gifts" style={{ width: '36px', height: '36px', filter: 'invert(1)' }} />
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '8px' }}>Перевод подарка в Банк</div>
+                <p style={{ fontSize: '13px', color: '#8b7fa8', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+                  Откройте профиль <b>@GuseBank</b> и отправьте ему подарок. Бэкенд автоматически добавит его в ваш инвентарь!
                 </p>
                 <button
                   onClick={() => window.Telegram?.WebApp?.openTelegramLink?.('https://t.me/GuseBank')}
@@ -765,7 +844,7 @@ export default function App() {
       {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(11, 8, 19, 0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid #23193d', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 20px', zIndex: 50 }}>
         <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
-          <span style={{ fontSize: '22px' }}>🎁</span>
+          <img src={ICONS.gift} alt="Инвентарь" style={{ width: '22px', height: '22px', filter: 'invert(1)' }} />
         </button>
 
         <button
