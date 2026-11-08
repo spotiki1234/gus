@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTonConnectUI, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
 import confetti from 'canvas-confetti';
 
-// Боевой TON-кошелек для приёма депозитов
 const RECEIVER_TON_ADDRESS = 'UQAKTkSiwZWqUDUjlydR0fxQPaPfsHbNRn0kvy8tcJwKzkrT';
 
 interface TgUser {
@@ -49,15 +48,12 @@ export default function App() {
     return window.Telegram?.WebApp?.initDataUnsafe?.user || { first_name: 'Пользователь', id: 0 };
   });
 
-  // Баланс (синхронизируется с облачной базой Neon)
   const [balanceTon, setBalanceTon] = useState<number>(0.0);
   const [balanceStars, setBalanceStars] = useState<number>(0);
 
-  // Списки реальных подарков
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Состояние рулетки апгрейда
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -65,15 +61,14 @@ export default function App() {
 
   // Шторка пополнения
   const [isDepositOpen, setIsDepositOpen] = useState(false);
-  const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'gifts'>('methods');
+  const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'gifts' | 'cryptobot' | 'xrocket'>('methods');
   const [tonAmountInput, setTonAmountInput] = useState('1.0');
+  const [cryptoPayAmount, setCryptoPayAmount] = useState('1.0');
   const [starsToBuy, setStarsToBuy] = useState(100);
 
-  // TON Connect
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
-  // Синхронизация данных с базой Neon при запуске
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -82,7 +77,6 @@ export default function App() {
     }
 
     if (tgUser.id) {
-      // 1. Загрузка баланса из облачной базы
       fetch(`/api/user-balance?userId=${tgUser.id}`)
         .then((res) => res.json())
         .then((data: { stars?: number; ton?: number }) => {
@@ -90,14 +84,12 @@ export default function App() {
           if (typeof data.ton === 'number') setBalanceTon(data.ton);
         })
         .catch(() => {
-          // Если база недоступна — читаем локально
           const s = localStorage.getItem(`stars_${tgUser.id}`);
           const t = localStorage.getItem(`ton_${tgUser.id}`);
           if (s) setBalanceStars(parseInt(s, 10));
           if (t) setBalanceTon(parseFloat(t));
         });
 
-      // 2. Загрузка инвентаря пользователя
       fetch(`/api/inventory/${tgUser.id}`)
         .then((res) => res.json())
         .then((data: { items?: BankGift[] }) => {
@@ -106,7 +98,6 @@ export default function App() {
         .catch(() => {});
     }
 
-    // 3. Загрузка подарков банка
     fetch('/api/bank/gifts')
       .then((res) => res.json())
       .then((data: { available_gifts?: BankGift[] }) => {
@@ -115,7 +106,6 @@ export default function App() {
       .catch(() => {});
   }, [tgUser.id]);
 
-  // Функция сохранения баланса в базу Neon и локально
   const saveBalanceToDb = async (newStars: number, newTon: number) => {
     setBalanceStars(newStars);
     setBalanceTon(newTon);
@@ -137,7 +127,6 @@ export default function App() {
     }
   };
 
-  // Расчет шанса апгрейда с комиссией платформы 5%
   const calculateChance = (): number => {
     if (!selectedSource || !selectedTarget) return 0;
     if (selectedSource.price_ton >= selectedTarget.price_ton) return 0;
@@ -147,7 +136,6 @@ export default function App() {
 
   const chance = calculateChance();
 
-  // Запуск круговой неоновой рулетки
   const handleUpgrade = () => {
     if (!selectedSource || !selectedTarget || isSpinning || chance <= 0) return;
 
@@ -180,7 +168,6 @@ export default function App() {
     }, 3200);
   };
 
-  // НАСТОЯЩЕЕ ПОПОЛНЕНИЕ ЧЕРЕЗ TELEGRAM STARS
   const handleRealStarsPayment = async (amount: number) => {
     const tg = window.Telegram?.WebApp;
     if (!tg) {
@@ -207,7 +194,6 @@ export default function App() {
         return;
       }
 
-      // Вызов официальной синей шторки Telegram
       if (tg.openInvoice) {
         tg.openInvoice(data.invoiceLink, (status: string) => {
           if (status === 'paid') {
@@ -226,7 +212,6 @@ export default function App() {
     }
   };
 
-  // ДЕПОЗИТ TON CONNECT (СИНХРОНИЗИРУЕТСЯ В БД)
   const handleRealTonDeposit = async () => {
     if (!wallet) {
       alert('Сначала подключите кошелек кнопкой выше!');
@@ -264,29 +249,74 @@ export default function App() {
     }
   };
 
-  // Переход в CryptoBot
-  const handleCryptoBotPayment = () => {
+  // Оплата через CryptoBot с выбранной суммой
+  const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
+    const amount = parseFloat(cryptoPayAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Введите корректную сумму');
+      return;
+    }
+
     tg?.HapticFeedback?.impactOccurred('light');
-    const cryptoBotUrl = 'https://t.me/CryptoBot?start=pay';
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(cryptoBotUrl);
-    } else {
-      window.open(cryptoBotUrl, '_blank');
+
+    try {
+      const res = await fetch('/api/pay-cryptobot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountTon: amount, userId: tgUser.id }),
+      });
+
+      const data = await res.json();
+      if (data.invoiceUrl) {
+        setIsDepositOpen(false);
+        if (tg?.openTelegramLink) {
+          tg.openTelegramLink(data.invoiceUrl);
+        } else {
+          window.open(data.invoiceUrl, '_blank');
+        }
+      } else {
+        alert('Ошибка создания счета: ' + (data.error || 'Проверьте токен'));
+      }
+    } catch {
+      alert('Ошибка соединения с сервисом платежей');
     }
   };
 
-  // Переход в xRocket
-  const handleXRocketPayment = () => {
+  // Оплата через xRocket с выбранной суммой
+  const handleXRocketPayment = async () => {
     const tg = window.Telegram?.WebApp;
+    const amount = parseFloat(cryptoPayAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Введите корректную сумму');
+      return;
+    }
+
     tg?.HapticFeedback?.impactOccurred('light');
-    const xRocketUrl = 'https://t.me/rocketbot?start=pay';
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(xRocketUrl);
-    } else {
-      window.open(xRocketUrl, '_blank');
+
+    try {
+      const res = await fetch('/api/pay-xrocket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountTon: amount, userId: tgUser.id }),
+      });
+
+      const data = await res.json();
+      if (data.invoiceUrl) {
+        setIsDepositOpen(false);
+        if (tg?.openTelegramLink) {
+          tg.openTelegramLink(data.invoiceUrl);
+        } else {
+          window.open(data.invoiceUrl, '_blank');
+        }
+      } else {
+        alert('Ошибка создания счета: ' + (data.error || 'Проверьте токен'));
+      }
+    } catch {
+      alert('Ошибка соединения с сервисом платежей');
     }
   };
+
 
   return (
     <div style={{ backgroundColor: '#090514', color: '#fff', minHeight: '100vh', fontFamily: '-apple-system, sans-serif', paddingBottom: '100px' }}>
@@ -297,7 +327,6 @@ export default function App() {
           <div style={{ fontSize: '11px', color: '#9333ea', fontWeight: '600' }}>Хранилище @GuseBank</div>
         </div>
 
-        {/* Плашка баланса с кнопкой плюс */}
         <div onClick={() => { setIsDepositOpen(true); setDepositStep('methods'); }} style={{ background: '#1d1538', border: '1px solid #3b2d6b', borderRadius: '24px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: '800', color: '#0098ea' }}>💎 {balanceTon.toFixed(2)} TON</div>
@@ -516,6 +545,8 @@ export default function App() {
                 {depositStep === 'methods' && 'Способ пополнения'}
                 {depositStep === 'wallet' && 'Пополнение через TON'}
                 {depositStep === 'stars' && 'Покупка звёздами'}
+                {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
+                {depositStep === 'xrocket' && 'Пополнение xRocket'}
                 {depositStep === 'gifts' && 'Пополнение подарком'}
               </div>
               <button onClick={() => setIsDepositOpen(false)} style={{ background: '#20163d', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
@@ -548,7 +579,7 @@ export default function App() {
                   <span>›</span>
                 </div>
 
-                <div onClick={handleCryptoBotPayment} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                <div onClick={() => { setDepositStep('cryptobot'); setCryptoPayAmount('1.0'); }} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ fontSize: '24px' }}>🤖</span>
                     <span style={{ fontWeight: '700' }}>CryptoBot</span>
@@ -556,13 +587,159 @@ export default function App() {
                   <span>›</span>
                 </div>
 
-                <div onClick={handleXRocketPayment} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                <div onClick={() => { setDepositStep('xrocket'); setCryptoPayAmount('1.0'); }} style={{ background: '#1b1436', padding: '16px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ fontSize: '24px' }}>🚀</span>
                     <span style={{ fontWeight: '700' }}>xRocket</span>
                   </div>
                   <span>›</span>
                 </div>
+              </div>
+            )}
+
+            {/* ВЫБОР СУММЫ ДЛЯ CRYPTOBOT */}
+            {depositStep === 'cryptobot' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '46px', marginBottom: '8px' }}>🤖</div>
+                <div style={{ fontSize: '18px', fontWeight: '800' }}>Пополнение через CryptoBot</div>
+                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
+                  Введите сумму в TON для выставления счёта
+                </p>
+
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    value={cryptoPayAmount}
+                    onChange={(e) => setCryptoPayAmount(e.target.value)}
+                    style={{
+                      width: '160px',
+                      background: '#171126',
+                      border: '2px solid #0098ea',
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontSize: '32px',
+                      fontWeight: '900',
+                      color: '#0098ea',
+                      textAlign: 'center',
+                      outline: 'none',
+                    }}
+                  />
+                  <span style={{ fontSize: '24px', color: '#0098ea', fontWeight: '800' }}>TON</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                  {['0.5', '1.0', '5.0', '10.0'].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => setCryptoPayAmount(val)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        borderRadius: '14px',
+                        border: 'none',
+                        background: cryptoPayAmount === val ? '#0098ea' : '#1b1436',
+                        color: cryptoPayAmount === val ? '#fff' : '#8b7fa8',
+                        fontWeight: '800',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {val} TON
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleCryptoBotPayment}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: '#0098ea',
+                    color: '#fff',
+                    fontWeight: '800',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Перейти к оплате {cryptoPayAmount} TON
+                </button>
+              </div>
+            )}
+
+            {/* ВЫБОР СУММЫ ДЛЯ XROCKET */}
+            {depositStep === 'xrocket' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '46px', marginBottom: '8px' }}>🚀</div>
+                <div style={{ fontSize: '18px', fontWeight: '800' }}>Пополнение через xRocket</div>
+                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '4px 0 16px 0' }}>
+                  Введите сумму в TON для выставления счёта
+                </p>
+
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    value={cryptoPayAmount}
+                    onChange={(e) => setCryptoPayAmount(e.target.value)}
+                    style={{
+                      width: '160px',
+                      background: '#171126',
+                      border: '2px solid #a855f7',
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontSize: '32px',
+                      fontWeight: '900',
+                      color: '#a855f7',
+                      textAlign: 'center',
+                      outline: 'none',
+                    }}
+                  />
+                  <span style={{ fontSize: '24px', color: '#a855f7', fontWeight: '800' }}>TON</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                  {['0.5', '1.0', '5.0', '10.0'].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => setCryptoPayAmount(val)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        borderRadius: '14px',
+                        border: 'none',
+                        background: cryptoPayAmount === val ? '#a855f7' : '#1b1436',
+                        color: cryptoPayAmount === val ? '#fff' : '#8b7fa8',
+                        fontWeight: '800',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {val} TON
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleXRocketPayment}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: '#a855f7',
+                    color: '#fff',
+                    fontWeight: '800',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Перейти к оплате {cryptoPayAmount} TON
+                </button>
               </div>
             )}
 
@@ -575,7 +752,6 @@ export default function App() {
                   Введите сумму или выберите быстрый вариант
                 </p>
 
-                {/* Поле ручного ввода любого количества звёзд */}
                 <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
                   <input
                     type="number"
@@ -603,7 +779,6 @@ export default function App() {
                   <span style={{ fontSize: '32px', color: '#fbbf24' }}>★</span>
                 </div>
 
-                {/* Быстрые кнопки пресетов */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
                   {[50, 100, 500, 1000].map((val) => (
                     <button
@@ -626,7 +801,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Кнопка запуска оплаты Stars */}
                 <button
                   disabled={!starsToBuy || starsToBuy <= 0}
                   onClick={() => handleRealStarsPayment(starsToBuy)}
@@ -705,7 +879,7 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* НИЖНЯЯ НАВИГАЦИЯ */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(11, 8, 19, 0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid #23193d', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 20px', zIndex: 50 }}>
         <button onClick={() => setActiveTab('inventory')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: activeTab === 'inventory' ? 1 : 0.4 }}>
           <span style={{ fontSize: '22px' }}>🎁</span>
