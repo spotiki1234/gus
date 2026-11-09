@@ -1,7 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
+const BOT_TOKEN = process.env.BOT_TOKEN || '9272174063:AAE6GVLKvcSZ0k8MpLm1bocgkLekwFGiYeM';
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://gus-delta-one.vercel.app/'; // ваш домен Vercel
 
 export const bot = new Telegraf(BOT_TOKEN);
