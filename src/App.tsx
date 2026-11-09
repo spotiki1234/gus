@@ -67,6 +67,12 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
+  // Переключатель под кнопкой: «Мой инвентарь» / «Желаемые подарки»
+  const [subTab, setSubTab] = useState<'inventory' | 'targets'>('inventory');
+
+  // Активный пресет множителя/шанса: 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%' | null
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
   // Реальный онлайн, приходящий от сервера (/api/online)
   const [onlineCount, setOnlineCount] = useState<number>(1);
 
@@ -183,6 +189,39 @@ export default function App() {
 
   const chance = calculateChance();
 
+  // Функция автоматического подбора цели по пресету процента/множителя
+  const applyPreset = (preset: 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%') => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    setActivePreset(preset);
+
+    if (!selectedSource || bankVault.length === 0) {
+      // Если предмет ещё не выбран — просто переключаем вкладку на желаемые подарки
+      setSubTab('targets');
+      return;
+    }
+
+    const sourcePrice = selectedSource.price_ton;
+    let targetPrice = 0;
+
+    if (preset === 'x2') targetPrice = sourcePrice * 2;
+    else if (preset === 'x4') targetPrice = sourcePrice * 4;
+    else if (preset === 'x8') targetPrice = sourcePrice * 8;
+    else if (preset === '35%') targetPrice = (sourcePrice * 0.95 * 100) / 35;
+    else if (preset === '55%') targetPrice = (sourcePrice * 0.95 * 100) / 55;
+    else if (preset === '75%') targetPrice = (sourcePrice * 0.95 * 100) / 75;
+
+    // Ищем подарок в банке, стоимость которого строго выше выбранного и ближе всего к targetPrice
+    const validTargets = bankVault.filter((g) => g.price_ton > sourcePrice);
+    if (validTargets.length > 0) {
+      const best = validTargets.reduce((prev, curr) =>
+        Math.abs(curr.price_ton - targetPrice) < Math.abs(prev.price_ton - targetPrice) ? curr : prev
+      );
+      setSelectedTarget(best);
+    }
+
+    setSubTab('targets');
+  };
+
   const handleUpgrade = () => {
     if (!selectedSource || !selectedTarget || isSpinning || chance <= 0) return;
 
@@ -207,10 +246,12 @@ export default function App() {
         ]);
         setSelectedSource(null);
         setSelectedTarget(null);
+        setActivePreset(null);
       } else {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
         setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
         setSelectedSource(null);
+        setActivePreset(null);
       }
     }, 3200);
   };
@@ -512,6 +553,7 @@ export default function App() {
 
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
               <div
+                onClick={() => setSubTab('inventory')}
                 style={{
                   width: '110px',
                   height: '120px',
@@ -523,6 +565,7 @@ export default function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: '6px',
+                  cursor: 'pointer',
                 }}
               >
                 {selectedSource ? (
@@ -539,10 +582,7 @@ export default function App() {
               <div style={{ fontSize: '18px', color: '#8b7fa8', fontWeight: '900' }}>➔</div>
 
               <div
-                onClick={() => {
-                  setActiveTab('shop');
-                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                }}
+                onClick={() => setSubTab('targets')}
                 style={{
                   width: '110px',
                   height: '120px',
@@ -590,87 +630,232 @@ export default function App() {
             </button>
           </div>
 
-          {/* Инвентарь */}
-          <div style={{ marginTop: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>
-                Мой инвентарь ({userInventory.length})
-              </div>
-              <button
-                onClick={() => {
-                  setIsDepositOpen(true);
-                  setDepositStep('methods');
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#eab308',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                }}
-              >
-                Пополнить
-              </button>
-            </div>
-
-            {userInventory.length === 0 ? (
-              <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
-                <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
-                </div>
-                <div style={{ fontSize: '14px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
-                <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 12px 0' }}>
-                  Выберите подарок на витрине магазина или отправьте NFT в Банк
-                </p>
+          {/* ПАНЕЛЬ ВЫБОРА ПРОЦЕНТА / МНОЖИТЕЛЯ АПГРЕЙДА (x2, x4, x8, 35%, 55%, 75%) */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '6px',
+              marginTop: '16px',
+              justifyContent: 'space-between',
+            }}
+          >
+            {[
+              { id: 'x2', label: 'x2', border: '#3b2d6b' },
+              { id: 'x4', label: 'x4', border: '#3b2d6b' },
+              { id: 'x8', label: 'x8', border: '#3b2d6b' },
+              { id: '35%', label: '35%', border: '#ef4444' }, // красный
+              { id: '55%', label: '55%', border: '#eab308' }, // желтый
+              { id: '75%', label: '75%', border: '#22c55e' }, // зеленый
+            ].map((btn) => {
+              const isSelected = activePreset === btn.id;
+              return (
                 <button
-                  onClick={() => {
-                    setActiveTab('shop');
-                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                  }}
+                  key={btn.id}
+                  onClick={() => applyPreset(btn.id as 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%')}
                   style={{
-                    background: '#a855f7',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '9px 18px',
-                    fontWeight: '700',
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: '20px',
+                    background: isSelected ? 'rgba(255,255,255,0.12)' : '#140f26',
+                    border: isSelected ? `2px solid ${btn.border}` : `1px solid ${btn.border}`,
+                    color: isSelected ? '#fff' : '#9ca3af',
                     fontSize: '12px',
+                    fontWeight: '800',
                     cursor: 'pointer',
+                    boxShadow: isSelected ? `0 0 10px ${btn.border}` : 'none',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  Перейти в магазин
+                  {btn.label}
                 </button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                {userInventory.map((gift) => (
-                  <div
-                    key={gift.id}
+              );
+            })}
+          </div>
+
+          {/* ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ: «Мой инвентарь» / «Желаемые подарки» */}
+          <div
+            style={{
+              marginTop: '14px',
+              background: '#130e24',
+              borderRadius: '24px',
+              padding: '4px',
+              display: 'flex',
+              gap: '4px',
+              border: '1px solid #23193d',
+            }}
+          >
+            <button
+              onClick={() => {
+                setSubTab('inventory');
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+              }}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                borderRadius: '20px',
+                border: 'none',
+                background: subTab === 'inventory' ? '#22183d' : 'transparent',
+                color: subTab === 'inventory' ? '#fff' : '#6b7280',
+                fontSize: '13px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Мой инвентарь ({userInventory.length})
+            </button>
+            <button
+              onClick={() => {
+                setSubTab('targets');
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+              }}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                borderRadius: '20px',
+                border: 'none',
+                background: subTab === 'targets' ? '#22183d' : 'transparent',
+                color: subTab === 'targets' ? '#fff' : '#6b7280',
+                fontSize: '13px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Желаемые подарки ({bankVault.length})
+            </button>
+          </div>
+
+          {/* КОНТЕНТ ПОДТАБОВ */}
+          <div style={{ marginTop: '14px' }}>
+            {/* ТАБ 1: МОЙ ИНВЕНТАРЬ */}
+            {subTab === 'inventory' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                  <button
                     onClick={() => {
-                      setSelectedSource(gift);
-                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      setIsDepositOpen(true);
+                      setDepositStep('methods');
                     }}
                     style={{
-                      background: '#1c1433',
-                      borderRadius: '20px',
-                      padding: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
+                      background: 'none',
+                      border: 'none',
+                      color: '#eab308',
+                      fontSize: '12px',
+                      fontWeight: '700',
                       cursor: 'pointer',
-                      border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
-                      boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
-                      transition: 'all 0.2s',
                     }}
                   >
-                    <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                      💎 {gift.price_ton}
+                    Пополнить
+                  </button>
+                </div>
+
+                {userInventory.length === 0 ? (
+                  <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
+                    <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
                     </div>
-                    <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                    <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
+                    <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 12px 0' }}>
+                      Выберите подарок на витрине банка или пополните баланс
+                    </p>
+                    <button
+                      onClick={() => setSubTab('targets')}
+                      style={{
+                        background: '#a855f7',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '14px',
+                        padding: '9px 18px',
+                        fontWeight: '700',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Выбрать цель из банка
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    {userInventory.map((gift) => (
+                      <div
+                        key={gift.id}
+                        onClick={() => {
+                          setSelectedSource(gift);
+                          window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                        }}
+                        style={{
+                          background: '#1c1433',
+                          borderRadius: '20px',
+                          padding: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
+                          boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
+                          💎 {gift.price_ton}
+                        </div>
+                        <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
+                        <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ТАБ 2: ЖЕЛАЕМЫЕ ПОДАРКИ (БАНК) */}
+            {subTab === 'targets' && (
+              <div>
+                {bankVault.length === 0 ? (
+                  <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700' }}>В банке пока нет подарков</div>
+                    <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 0 0' }}>
+                      Подарки скоро появятся на балансе @GuseBank
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    {bankVault.map((gift) => {
+                      const isSelected = selectedTarget?.id === gift.id;
+                      const isLowerPrice = selectedSource && gift.price_ton <= selectedSource.price_ton;
+                      return (
+                        <div
+                          key={gift.id}
+                          onClick={() => {
+                            setSelectedTarget(gift);
+                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                          }}
+                          style={{
+                            background: '#1c1433',
+                            borderRadius: '20px',
+                            padding: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            border: isSelected ? '2px solid #eab308' : '1px solid #2d2150',
+                            boxShadow: isSelected ? '0 0 12px rgba(234, 179, 8, 0.45)' : 'none',
+                            opacity: isLowerPrice ? 0.45 : 1,
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
+                            💎 {gift.price_ton}
+                          </div>
+                          <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
+                          <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                          <div style={{ fontSize: '8px', color: '#8b7fa8' }}>{gift.serial_number || '#0000'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -701,6 +886,7 @@ export default function App() {
                   onClick={() => {
                     setSelectedTarget(gift);
                     setActiveTab('upgrade');
+                    setSubTab('targets');
                     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                   }}
                   style={{
@@ -910,6 +1096,7 @@ export default function App() {
                         setSelectedSource(gift);
                         setIsProfileOpen(false);
                         setActiveTab('upgrade');
+                        setSubTab('targets');
                         window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                       }}
                       style={{
