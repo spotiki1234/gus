@@ -467,7 +467,7 @@ export default function App() {
         color: '#fff',
         minHeight: '100vh',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        paddingBottom: '110px',
+        paddingBottom: '90px',
         zoom: 0.91,
       }}
     >
@@ -1843,26 +1843,27 @@ export default function App() {
         </div>
       )}
 
-      {/* ЗАКРУГЛЕННАЯ ПАРИЩАЯ НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* КОМПАКТНАЯ ПОЛУПРОЗРАЧНАЯ НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div
         style={{
           position: 'fixed',
-          bottom: '12px',
-          left: '14px',
-          right: '14px',
-          background: 'rgba(18, 13, 36, 0.94)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '30px',
-          border: '1px solid #2d2150',
-          boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
+          bottom: '10px',
+          left: '28px',
+          right: '28px',
+          background: 'rgba(18, 13, 36, 0.65)',
+          backdropFilter: 'blur(24px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+          borderRadius: '26px',
+          border: '1px solid rgba(168, 85, 247, 0.22)',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          padding: '8px 18px',
+          padding: '4px 14px',
           zIndex: 50,
         }}
       >
-        {/* КНОПКА МАГАЗИНА С ПРИКРЕПЛЕННОЙ КАРТИНКОЙ (ВМЕСТО БАНКА) */}
+        {/* КНОПКА МАГАЗИНА С ИКОНКОЙ */}
         <button
           onClick={() => {
             setActiveTab('shop');
@@ -1872,7 +1873,7 @@ export default function App() {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            opacity: activeTab === 'shop' ? 1 : 0.45,
+            opacity: activeTab === 'shop' ? 1 : 0.5,
             padding: '4px',
             display: 'flex',
             alignItems: 'center',
@@ -1884,34 +1885,34 @@ export default function App() {
             src={ICONS.shop}
             alt="Магазин"
             style={{
-              width: '28px',
-              height: '28px',
+              width: '24px',
+              height: '24px',
               objectFit: 'contain',
               display: 'block',
-              filter: activeTab === 'shop' ? 'drop-shadow(0 0 8px rgba(234, 179, 8, 0.6))' : 'none',
+              filter: activeTab === 'shop' ? 'drop-shadow(0 0 6px rgba(234, 179, 8, 0.7))' : 'none',
             }}
           />
         </button>
 
-        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА */}
+        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА (УМЕНЬШЕНА ДЛЯ КОМПАКТНОСТИ) */}
         <button
           onClick={() => {
             setActiveTab('upgrade');
             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
           }}
           style={{
-            width: '56px',
-            height: '56px',
+            width: '46px',
+            height: '46px',
             borderRadius: '50%',
-            background: activeTab === 'upgrade' ? '#171126' : '#130d24',
-            border: activeTab === 'upgrade' ? '2.5px solid #eab308' : '1.5px solid #3b2d6b',
-            boxShadow: activeTab === 'upgrade' ? '0 0 18px rgba(234, 179, 8, 0.45)' : '0 2px 8px rgba(0,0,0,0.5)',
+            background: activeTab === 'upgrade' ? 'linear-gradient(135deg, #1b1338 0%, #130d29 100%)' : '#140e26',
+            border: activeTab === 'upgrade' ? '2px solid #eab308' : '1px solid #3b2d6b',
+            boxShadow: activeTab === 'upgrade' ? '0 0 14px rgba(234, 179, 8, 0.4)' : '0 2px 6px rgba(0,0,0,0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             padding: 0,
-            transform: 'translateY(-6px)',
+            transform: 'translateY(-4px)',
             transition: 'all 0.2s',
           }}
         >
@@ -1919,8 +1920,8 @@ export default function App() {
             src={ICONS.upgradeArrow}
             alt="Апгрейд"
             style={{
-              width: '32px',
-              height: '32px',
+              width: '26px',
+              height: '26px',
               objectFit: 'contain',
               display: 'block',
             }}
@@ -1937,8 +1938,8 @@ export default function App() {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            opacity: isProfileOpen ? 1 : 0.45,
-            padding: '6px',
+            opacity: isProfileOpen ? 1 : 0.5,
+            padding: '4px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1946,7 +1947,7 @@ export default function App() {
             transition: 'all 0.2s',
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
