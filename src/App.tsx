@@ -11,6 +11,7 @@ const ICONS = {
   ton: '/icons/ton.png',
   cryptobot: '/icons/cryptobot.png',
   upgradeArrow: '/icons/upgrade-arrow.png',
+  shop: 'shop.jpg',
 };
 
 interface TgUser {
@@ -237,7 +238,7 @@ export default function App() {
     });
   };
 
-  // Сброс множителей по умолчанию (кнопка возврата ↺)
+  // Сброс множителей по умолчанию
   const resetMultipliers = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
     setTempMultipliers(['2', '4', '8']);
@@ -245,7 +246,7 @@ export default function App() {
     localStorage.setItem('guse_custom_multipliers', JSON.stringify([2, 4, 8]));
   };
 
-  // Сброс процентов по умолчанию (кнопка возврата ↺)
+  // Сброс процентов по умолчанию
   const resetPercents = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
     setTempPercents(['35', '55', '75']);
@@ -441,18 +442,6 @@ export default function App() {
     }
   };
 
-  const handleOpenBankChat = () => {
-    const tg = window.Telegram?.WebApp;
-    tg?.HapticFeedback?.impactOccurred('light');
-    setIsDepositOpen(false);
-    setIsProfileOpen(false);
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink('https://t.me/GuseBank');
-    } else {
-      window.open('https://t.me/GuseBank', '_blank');
-    }
-  };
-
   const handleDisconnectWallet = async () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     try {
@@ -478,7 +467,7 @@ export default function App() {
         color: '#fff',
         minHeight: '100vh',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        paddingBottom: '100px',
+        paddingBottom: '110px',
         zoom: 0.91,
       }}
     >
@@ -494,118 +483,115 @@ export default function App() {
         }
       `}</style>
 
-      {/* Шапка: логотип + реальный ОНЛАЙН, Баланс и Аватарка */}
-      <div
-        style={{
-          padding: '12px 18px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: '#120d24',
-          borderBottom: '1px solid #23193d',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            onClick={() => setActiveTab('upgrade')}
-            style={{ fontWeight: '900', fontSize: '18px', letterSpacing: '-0.4px', color: '#fff', cursor: 'pointer' }}
-          >
-            Guse<span style={{ color: '#eab308' }}>Up</span>
-          </div>
-
+      {/* ЗАКРУГЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ (БЕЗ ЛОГОТИПА) */}
+      <div style={{ padding: '12px 14px 0 14px' }}>
+        <div
+          style={{
+            padding: '10px 16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(18, 13, 36, 0.92)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '24px',
+            border: '1px solid #281d45',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+          }}
+        >
+          {/* Слева: красивый индикатор онлайна */}
           <div
             style={{
               background: 'rgba(34, 197, 94, 0.12)',
               border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: '12px',
-              padding: '3px 8px',
+              borderRadius: '16px',
+              padding: '6px 12px',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '7px',
             }}
           >
             <div
               style={{
-                width: '6px',
-                height: '6px',
+                width: '7px',
+                height: '7px',
                 borderRadius: '50%',
                 background: '#22c55e',
                 boxShadow: '0 0 8px #22c55e',
               }}
             />
-            <span style={{ fontSize: '11px', fontWeight: '800', color: '#4ade80' }}>
+            <span style={{ fontSize: '12px', fontWeight: '800', color: '#4ade80' }}>
               {onlineCount}
             </span>
           </div>
-        </div>
 
-        {/* Правый блок: Баланс + Аватарка */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            onClick={() => {
-              setIsDepositOpen(true);
-              setDepositStep('methods');
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #1f163d 0%, #150f29 100%)',
-              border: '1px solid #3b2d6b',
-              borderRadius: '24px',
-              padding: '6px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            }}
-          >
-            <div style={{ fontSize: '13px', fontWeight: '900', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <img src={ICONS.ton} alt="TON" style={{ width: '15px', height: '15px', borderRadius: '3px' }} />
-              {balanceTon.toFixed(2)} TON
-            </div>
+          {/* Справа: Баланс + Аватарка */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
+              onClick={() => {
+                setIsDepositOpen(true);
+                setDepositStep('methods');
+              }}
               style={{
-                width: '20px',
-                height: '20px',
+                background: 'linear-gradient(135deg, #1f163d 0%, #150f29 100%)',
+                border: '1px solid #3b2d6b',
+                borderRadius: '24px',
+                padding: '6px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: '900', color: '#0098ea', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <img src={ICONS.ton} alt="TON" style={{ width: '15px', height: '15px', borderRadius: '3px' }} />
+                {balanceTon.toFixed(2)} TON
+              </div>
+              <div
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: '#eab308',
+                  color: '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '900',
+                  fontSize: '13px',
+                }}
+              >
+                +
+              </div>
+            </div>
+
+            <div
+              onClick={() => {
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                setIsProfileOpen(true);
+              }}
+              style={{
+                width: '36px',
+                height: '36px',
                 borderRadius: '50%',
-                background: '#eab308',
-                color: '#000',
+                background: 'linear-gradient(135deg, #a855f7 0%, #6b21a8 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: '900',
-                fontSize: '13px',
+                overflow: 'hidden',
+                border: '2px solid #eab308',
+                boxShadow: '0 2px 10px rgba(234, 179, 8, 0.35)',
+                flexShrink: 0,
+                cursor: 'pointer',
+                transition: 'transform 0.15s ease',
               }}
             >
-              +
+              {tgUser.photo_url ? (
+                <img src={tgUser.photo_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontWeight: '800', fontSize: '14px', color: '#fff' }}>{userInitial}</span>
+              )}
             </div>
-          </div>
-
-          <div
-            onClick={() => {
-              window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-              setIsProfileOpen(true);
-            }}
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #a855f7 0%, #6b21a8 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              border: '2px solid #eab308',
-              boxShadow: '0 2px 10px rgba(234, 179, 8, 0.35)',
-              flexShrink: 0,
-              cursor: 'pointer',
-              transition: 'transform 0.15s ease',
-            }}
-          >
-            {tgUser.photo_url ? (
-              <img src={tgUser.photo_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <span style={{ fontWeight: '800', fontSize: '14px', color: '#fff' }}>{userInitial}</span>
-            )}
           </div>
         </div>
       </div>
@@ -834,9 +820,9 @@ export default function App() {
               { id: 'm1', label: `x${customMultipliers[0]}`, border: '#3b2d6b', mult: customMultipliers[0] },
               { id: 'm2', label: `x${customMultipliers[1]}`, border: '#3b2d6b', mult: customMultipliers[1] },
               { id: 'm3', label: `x${customMultipliers[2]}`, border: '#3b2d6b', mult: customMultipliers[2] },
-              { id: 'p1', label: `${customPercents[0]}%`, border: '#ef4444', percent: customPercents[0] }, // красный
-              { id: 'p2', label: `${customPercents[1]}%`, border: '#eab308', percent: customPercents[1] }, // желтый
-              { id: 'p3', label: `${customPercents[2]}%`, border: '#22c55e', percent: customPercents[2] }, // зеленый
+              { id: 'p1', label: `${customPercents[0]}%`, border: '#ef4444', percent: customPercents[0] },
+              { id: 'p2', label: `${customPercents[1]}%`, border: '#eab308', percent: customPercents[1] },
+              { id: 'p3', label: `${customPercents[2]}%`, border: '#22c55e', percent: customPercents[2] },
             ].map((btn) => {
               const isSelected = activePreset === btn.id;
               return (
@@ -1054,7 +1040,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ШТОРКА «БЫСТРЫЙ ПОДБОР» (ТОЧНО КАК НА СКРИНШОТЕ) */}
+      {/* ШТОРКА «БЫСТРЫЙ ПОДБОР» */}
       {isSettingsOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 130, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '88vh', overflowY: 'auto' }}>
@@ -1126,7 +1112,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Жёлтая иконка сброса ↺ */}
                 <button
                   onClick={resetMultipliers}
                   title="Сбросить коэффициенты"
@@ -1157,9 +1142,9 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
                   {[
-                    { idx: 0, border: '#ef4444' }, // Красная
-                    { idx: 1, border: '#eab308' }, // Жёлтая
-                    { idx: 2, border: '#22c55e' }, // Зелёная
+                    { idx: 0, border: '#ef4444' },
+                    { idx: 1, border: '#eab308' },
+                    { idx: 2, border: '#22c55e' },
                   ].map((cfg) => (
                     <div
                       key={cfg.idx}
@@ -1202,7 +1187,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Жёлтая иконка сброса ↺ */}
                 <button
                   onClick={resetPercents}
                   title="Сбросить проценты"
@@ -1547,31 +1531,6 @@ export default function App() {
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div
-                  onClick={handleOpenBankChat}
-                  style={{
-                    background: '#1b1436',
-                    padding: '12px 14px',
-                    borderRadius: '18px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    border: '1px solid #2d2150',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: '#271c47', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={ICONS.gift} alt="Gifts" style={{ width: '20px', height: '20px', filter: 'invert(1)' }} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: '800', fontSize: '14px' }}>Gifts</div>
-                      <div style={{ fontSize: '10px', color: '#8b7fa8' }}>Перевод подарка на @GuseBank</div>
-                    </div>
-                  </div>
-                  <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
-                </div>
-
-                <div
                   onClick={() => setDepositStep('stars')}
                   style={{
                     background: '#1b1436',
@@ -1884,16 +1843,18 @@ export default function App() {
         </div>
       )}
 
-      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* ЗАКРУГЛЕННАЯ ПАРИЩАЯ НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div
         style={{
           position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: 'rgba(11, 8, 19, 0.95)',
-          backdropFilter: 'blur(16px)',
-          borderTop: '1px solid #23193d',
+          bottom: '12px',
+          left: '14px',
+          right: '14px',
+          background: 'rgba(18, 13, 36, 0.94)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '30px',
+          border: '1px solid #2d2150',
+          boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
@@ -1901,22 +1862,38 @@ export default function App() {
           zIndex: 50,
         }}
       >
+        {/* КНОПКА МАГАЗИНА С ПРИКРЕПЛЕННОЙ КАРТИНКОЙ (ВМЕСТО БАНКА) */}
         <button
-          onClick={handleOpenBankChat}
+          onClick={() => {
+            setActiveTab('shop');
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+          }}
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            opacity: 0.7,
-            padding: '6px',
+            opacity: activeTab === 'shop' ? 1 : 0.45,
+            padding: '4px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            transition: 'all 0.2s',
           }}
         >
-          <img src={ICONS.gift} alt="Gifts" style={{ width: '22px', height: '22px', filter: 'invert(1)' }} />
+          <img
+            src={ICONS.shop}
+            alt="Магазин"
+            style={{
+              width: '28px',
+              height: '28px',
+              objectFit: 'contain',
+              display: 'block',
+              filter: activeTab === 'shop' ? 'drop-shadow(0 0 8px rgba(234, 179, 8, 0.6))' : 'none',
+            }}
+          />
         </button>
 
+        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА */}
         <button
           onClick={() => {
             setActiveTab('upgrade');
@@ -1928,7 +1905,7 @@ export default function App() {
             borderRadius: '50%',
             background: activeTab === 'upgrade' ? '#171126' : '#130d24',
             border: activeTab === 'upgrade' ? '2.5px solid #eab308' : '1.5px solid #3b2d6b',
-            boxShadow: activeTab === 'upgrade' ? '0 0 16px rgba(234, 179, 8, 0.45)' : '0 2px 8px rgba(0,0,0,0.5)',
+            boxShadow: activeTab === 'upgrade' ? '0 0 18px rgba(234, 179, 8, 0.45)' : '0 2px 8px rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1950,23 +1927,29 @@ export default function App() {
           />
         </button>
 
+        {/* СПРАВА: КНОПКА ПРОФИЛЯ */}
         <button
           onClick={() => {
-            setActiveTab('shop');
+            setIsProfileOpen(true);
             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
           }}
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            opacity: activeTab === 'shop' ? 1 : 0.45,
+            opacity: isProfileOpen ? 1 : 0.45,
             padding: '6px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            color: '#fff',
+            transition: 'all 0.2s',
           }}
         >
-          <span style={{ fontSize: '22px' }}>🛒</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </button>
       </div>
     </div>
