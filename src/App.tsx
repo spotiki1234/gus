@@ -67,8 +67,8 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Живой онлайн с естественными микро-колебаниями (например, 142..155 игроков)
-  const [onlineCount, setOnlineCount] = useState<number>(148);
+  // Реальный онлайн, приходящий от сервера (/api/online)
+  const [onlineCount, setOnlineCount] = useState<number>(1);
 
   // Статистика выведенных предметов из localStorage
   const [withdrawnCount] = useState<number>(() => {
@@ -98,7 +98,6 @@ export default function App() {
 
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
-  // Официальный хук TonConnect для красивого адреса UQ.../EQ...
   const userFriendlyAddress = useTonAddress();
 
   useEffect(() => {
@@ -134,15 +133,26 @@ export default function App() {
       })
       .catch(() => {});
 
-    // Микро-динамика живого онлайна (каждые 12 секунд меняется на ±1..2)
-    const onlineInterval = setInterval(() => {
-      setOnlineCount((prev) => {
-        const delta = Math.floor(Math.random() * 5) - 2; // -2, -1, 0, 1, 2
-        return Math.max(120, Math.min(220, prev + delta));
-      });
-    }, 12000);
+    // Честный пинг реального онлайна: шлём POST с userId каждые 15 секунд
+    const pingOnline = () => {
+      fetch('/api/online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: tgUser.id || 0 }),
+      })
+        .then((res) => res.json())
+        .then((data: { online?: number }) => {
+          if (typeof data.online === 'number') {
+            setOnlineCount(data.online);
+          }
+        })
+        .catch(() => {});
+    };
 
-    return () => clearInterval(onlineInterval);
+    pingOnline();
+    const interval = setInterval(pingOnline, 15000);
+
+    return () => clearInterval(interval);
   }, [tgUser.id]);
 
   const saveBalanceToDb = async (newTon: number) => {
@@ -346,7 +356,6 @@ export default function App() {
   const starsConvertedTon = (starsToBuy / STARS_PER_TON).toFixed(2);
   const userInitial = tgUser.first_name ? tgUser.first_name.charAt(0).toUpperCase() : 'U';
 
-  // Форматирование красивого пользовательского адреса (UQ...xxxx)
   const displayWalletAddress = userFriendlyAddress
     ? `${userFriendlyAddress.slice(0, 4)}...${userFriendlyAddress.slice(-4)}`
     : wallet
@@ -364,7 +373,7 @@ export default function App() {
         zoom: 0.91,
       }}
     >
-      {/* Шапка: логотип + статус ОНЛАЙН слева, Баланс и Аватарка справа */}
+      {/* Шапка: логотип + реальный ОНЛАЙН, Баланс и Аватарка */}
       <div
         style={{
           padding: '12px 18px',
@@ -375,7 +384,6 @@ export default function App() {
           borderBottom: '1px solid #23193d',
         }}
       >
-        {/* Логотип + Индикатор Онлайна */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             onClick={() => setActiveTab('upgrade')}
@@ -384,7 +392,7 @@ export default function App() {
             Guse<span style={{ color: '#eab308' }}>Up</span>
           </div>
 
-          {/* Зеленая мигающая точка и счетчик онлайн */}
+          {/* Реальный счетчик онлайн */}
           <div
             style={{
               background: 'rgba(34, 197, 94, 0.12)',
@@ -411,7 +419,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Правый блок: Баланс + Аватарка (кликабельная) */}
+        {/* Правый блок: Баланс + Аватарка */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             onClick={() => {
@@ -452,7 +460,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Аватарка пользователя: по клику открывает профиль */}
           <div
             onClick={() => {
               window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -487,7 +494,6 @@ export default function App() {
       {activeTab === 'upgrade' && (
         <div style={{ padding: '16px 18px 10px 18px' }}>
           <div style={{ background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-            {/* Круговая рулетка */}
             <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 18px auto' }}>
               <div
                 style={{
@@ -523,7 +529,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Слоты выбора предметов */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
               <div
                 style={{
@@ -552,7 +557,6 @@ export default function App() {
 
               <div style={{ fontSize: '18px', color: '#8b7fa8', fontWeight: '900' }}>➔</div>
 
-              {/* Правый слот: цель апгрейда */}
               <div
                 onClick={() => {
                   setActiveTab('shop');
@@ -584,7 +588,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Кнопка действия «Улучшить» */}
             <button
               onClick={handleUpgrade}
               disabled={!selectedSource || !selectedTarget || isSpinning || chance <= 0}
@@ -606,7 +609,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* ИНВЕНТАРЬ ПОЛЬЗОВАТЕЛЯ ПОД КНОПКОЙ «УЛУЧШИТЬ» */}
+          {/* Инвентарь */}
           <div style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>
@@ -743,11 +746,10 @@ export default function App() {
         </div>
       )}
 
-      {/* ШТОРКА ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ */}
+      {/* ШТОРКА ПРОФИЛЯ */}
       {isProfileOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 110, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '88vh', overflowY: 'auto' }}>
-            {/* Шапка шторки */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div style={{ fontSize: '17px', fontWeight: '800' }}>Мой профиль</div>
               <button
@@ -768,7 +770,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Карточка пользователя с балансом и пополнением */}
+            {/* Карточка профиля */}
             <div style={{ background: 'linear-gradient(135deg, #1b1338 0%, #130d29 100%)', borderRadius: '22px', padding: '16px', border: '1px solid #33235d', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
                 <div
@@ -799,7 +801,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Баланс + кнопка Пополнить */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0e091e', padding: '12px 14px', borderRadius: '16px', border: '1px solid #23193d' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Баланс</div>
@@ -831,7 +832,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Блок TON Кошелька (С КРАСИВЫМ UQ... АДРЕСОМ) */}
+            {/* Кошелёк */}
             <div style={{ background: '#171126', borderRadius: '20px', padding: '14px', border: '1px solid #271c47', marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>
                 TON Кошелек
@@ -873,7 +874,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Статистика выведенных предметов */}
+            {/* Статистика */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
               <div style={{ background: '#171126', borderRadius: '18px', padding: '12px 14px', border: '1px solid #271c47' }}>
                 <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Выведено предметов</div>
@@ -889,7 +890,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Инвентарь внизу профиля */}
+            {/* Инвентарь в профиле */}
             <div>
               <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Инвентарь ({userInventory.length})</span>
@@ -951,12 +952,11 @@ export default function App() {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       )}
 
-      {/* ШТОРКА ПОПОЛНЕНИЯ (BottomSheet) */}
+      {/* ШТОРКА ПОПОЛНЕНИЯ */}
       {isDepositOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 120, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -992,7 +992,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* СПИСОК МЕТОДОВ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div
@@ -1100,7 +1099,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ВЫБОР СУММЫ ДЛЯ STARS */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1192,7 +1190,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ВЫБОР СУММЫ ДЛЯ CRYPTOBOT */}
             {depositStep === 'cryptobot' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1269,7 +1266,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ПОДКЛЮЧЕНИЕ TON КОШЕЛЬКА */}
             {depositStep === 'wallet' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', borderRadius: '14px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
