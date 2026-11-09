@@ -67,16 +67,39 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Переключатель под кнопкой: «Мой инвентарь» / «Желаемые подарки»
+  // Переключатель под кнопкой: «Инвентарь» / «Желаемый предмет» (без цифр)
   const [subTab, setSubTab] = useState<'inventory' | 'targets'>('inventory');
 
-  // Активный пресет множителя/шанса: 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%' | null
+  // Быстрая анимация рулетки (молния)
+  const [isFastSpin, setIsFastSpin] = useState<boolean>(() => {
+    return localStorage.getItem('guse_fast_spin') === 'true';
+  });
+
+  // Настраиваемые проценты на кнопках (35%, 55%, 75% по умолчанию)
+  const [customPercents, setCustomPercents] = useState<[number, number, number]>(() => {
+    const saved = localStorage.getItem('guse_custom_percents');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 3) return [parsed[0], parsed[1], parsed[2]];
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    return [35, 55, 75];
+  });
+
+  // Временные значения для инпутов в модалке настроек
+  const [tempPercents, setTempPercents] = useState<[string, string, string]>(['35', '55', '75']);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Активный пресет: 'x2' | 'x4' | 'x8' | 'p1' | 'p2' | 'p3' | null
   const [activePreset, setActivePreset] = useState<string | null>(null);
 
-  // Реальный онлайн, приходящий от сервера (/api/online)
+  // Реальный онлайн
   const [onlineCount, setOnlineCount] = useState<number>(1);
 
-  // Статистика выведенных предметов из localStorage
+  // Статистика выведенных предметов
   const [withdrawnCount] = useState<number>(() => {
     const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
     const saved = localStorage.getItem(`withdrawn_count_${userId}`);
@@ -189,13 +212,34 @@ export default function App() {
 
   const chance = calculateChance();
 
-  // Функция автоматического подбора цели по пресету процента/множителя
-  const applyPreset = (preset: 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%') => {
+  // Функция переключения быстрого режима (молния)
+  const toggleFastSpin = () => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    setIsFastSpin((prev) => {
+      const next = !prev;
+      localStorage.setItem('guse_fast_spin', String(next));
+      return next;
+    });
+  };
+
+  // Сохранение настроенных процентов
+  const handleSaveSettings = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    setActivePreset(preset);
+    const p1 = Math.min(85, Math.max(1, parseInt(tempPercents[0], 10) || 35));
+    const p2 = Math.min(85, Math.max(1, parseInt(tempPercents[1], 10) || 55));
+    const p3 = Math.min(85, Math.max(1, parseInt(tempPercents[2], 10) || 75));
+    const updated: [number, number, number] = [p1, p2, p3];
+    setCustomPercents(updated);
+    localStorage.setItem('guse_custom_percents', JSON.stringify(updated));
+    setIsSettingsOpen(false);
+  };
+
+  // Подбор цели по пресету процента/множителя
+  const applyPreset = (presetId: string, percentVal?: number, multiplierVal?: number) => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    setActivePreset(presetId);
 
     if (!selectedSource || bankVault.length === 0) {
-      // Если предмет ещё не выбран — просто переключаем вкладку на желаемые подарки
       setSubTab('targets');
       return;
     }
@@ -203,14 +247,12 @@ export default function App() {
     const sourcePrice = selectedSource.price_ton;
     let targetPrice = 0;
 
-    if (preset === 'x2') targetPrice = sourcePrice * 2;
-    else if (preset === 'x4') targetPrice = sourcePrice * 4;
-    else if (preset === 'x8') targetPrice = sourcePrice * 8;
-    else if (preset === '35%') targetPrice = (sourcePrice * 0.95 * 100) / 35;
-    else if (preset === '55%') targetPrice = (sourcePrice * 0.95 * 100) / 55;
-    else if (preset === '75%') targetPrice = (sourcePrice * 0.95 * 100) / 75;
+    if (multiplierVal) {
+      targetPrice = sourcePrice * multiplierVal;
+    } else if (percentVal) {
+      targetPrice = (sourcePrice * 0.95 * 100) / percentVal;
+    }
 
-    // Ищем подарок в банке, стоимость которого строго выше выбранного и ближе всего к targetPrice
     const validTargets = bankVault.filter((g) => g.price_ton > sourcePrice);
     if (validTargets.length > 0) {
       const best = validTargets.reduce((prev, curr) =>
@@ -233,7 +275,12 @@ export default function App() {
 
     const winAngle = chance * 3.6;
     const stopAngle = isWin ? Math.random() * winAngle : winAngle + Math.random() * (360 - winAngle);
-    setSpinAngle((prev) => prev + 1800 + stopAngle);
+    
+    // Если включена молния — крутим меньше оборотов и быстрее
+    const extraRotations = isFastSpin ? 720 : 1800;
+    const spinDuration = isFastSpin ? 800 : 3200;
+
+    setSpinAngle((prev) => prev + extraRotations + stopAngle);
 
     setTimeout(() => {
       setIsSpinning(false);
@@ -253,10 +300,10 @@ export default function App() {
         setSelectedSource(null);
         setActivePreset(null);
       }
-    }, 3200);
+    }, spinDuration);
   };
 
-  // Оплата звёздами (без навязчивых alert)
+  // Оплата звёздами
   const handleRealStarsPayment = async (amountStars: number) => {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
@@ -295,7 +342,7 @@ export default function App() {
     }
   };
 
-  // Пополнение TON через кошелек (без навязчивых alert)
+  // Пополнение TON через кошелек
   const handleRealTonDeposit = async () => {
     if (!wallet) return;
 
@@ -326,7 +373,7 @@ export default function App() {
     }
   };
 
-  // Оплата через CryptoBot (без alert)
+  // Оплата через CryptoBot
   const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
     const amount = parseFloat(cryptoPayAmount);
@@ -515,7 +562,76 @@ export default function App() {
       {/* АРЕНА АПГРЕЙДА */}
       {activeTab === 'upgrade' && (
         <div style={{ padding: '16px 18px 10px 18px' }}>
-          <div style={{ background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+          <div style={{ position: 'relative', background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+            
+            {/* ВЕРХ СЛЕВА: КНОПКА МОЛНИИ (БЫСТРАЯ КРУТКА) И КНОПКА НАСТРОЕК ПРОЦЕНТОВ */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '14px',
+                left: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                zIndex: 10,
+              }}
+            >
+              {/* Кнопка Молнии */}
+              <button
+                onClick={toggleFastSpin}
+                title={isFastSpin ? 'Быстрая крутка включена' : 'Быстрая крутка выключена'}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '12px',
+                  border: isFastSpin ? '1.5px solid #eab308' : '1px solid #2f2352',
+                  background: isFastSpin ? 'rgba(234, 179, 8, 0.2)' : '#1a1333',
+                  color: isFastSpin ? '#eab308' : '#71658f',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: isFastSpin ? '0 0 10px rgba(234, 179, 8, 0.4)' : 'none',
+                  transition: 'all 0.2s',
+                  padding: 0,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={isFastSpin ? '#eab308' : 'currentColor'}>
+                  <path d="M13 2L3 14h7v8l11-13h-8l0-7z" />
+                </svg>
+              </button>
+
+              {/* Кнопка Настроек (шестеренка) */}
+              <button
+                onClick={() => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setTempPercents([String(customPercents[0]), String(customPercents[1]), String(customPercents[2])]);
+                  setIsSettingsOpen(true);
+                }}
+                title="Настроить проценты"
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '12px',
+                  border: '1px solid #2f2352',
+                  background: '#1a1333',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                  padding: 0,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Круговая рулетка */}
             <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 18px auto' }}>
               <div
                 style={{
@@ -543,7 +659,9 @@ export default function App() {
                   width: '100%',
                   height: '100%',
                   transform: `rotate(${spinAngle}deg)`,
-                  transition: isSpinning ? 'transform 3.2s cubic-bezier(0.12, 0.8, 0.2, 1)' : 'none',
+                  transition: isSpinning
+                    ? `transform ${isFastSpin ? '0.8s cubic-bezier(0.1, 0.9, 0.2, 1)' : '3.2s cubic-bezier(0.12, 0.8, 0.2, 1)'}`
+                    : 'none',
                   pointerEvents: 'none',
                 }}
               >
@@ -626,11 +744,11 @@ export default function App() {
                 transition: 'all 0.2s',
               }}
             >
-              {isSpinning ? 'КРУТИМ РУЛЕТКУ...' : 'Улучшить'}
+              {isSpinning ? (isFastSpin ? '⚡ БЫСТРАЯ КРУТКА...' : 'КРУТИМ РУЛЕТКУ...') : 'Улучшить'}
             </button>
           </div>
 
-          {/* ПАНЕЛЬ ВЫБОРА ПРОЦЕНТА / МНОЖИТЕЛЯ АПГРЕЙДА (x2, x4, x8, 35%, 55%, 75%) */}
+          {/* ПАНЕЛЬ ВЫБОРА ПРОЦЕНТА / МНОЖИТЕЛЯ АПГРЕЙДА (x2, x4, x8 + настраиваемые проценты) */}
           <div
             style={{
               display: 'flex',
@@ -640,18 +758,18 @@ export default function App() {
             }}
           >
             {[
-              { id: 'x2', label: 'x2', border: '#3b2d6b' },
-              { id: 'x4', label: 'x4', border: '#3b2d6b' },
-              { id: 'x8', label: 'x8', border: '#3b2d6b' },
-              { id: '35%', label: '35%', border: '#ef4444' }, // красный
-              { id: '55%', label: '55%', border: '#eab308' }, // желтый
-              { id: '75%', label: '75%', border: '#22c55e' }, // зеленый
+              { id: 'x2', label: 'x2', border: '#3b2d6b', mult: 2 },
+              { id: 'x4', label: 'x4', border: '#3b2d6b', mult: 4 },
+              { id: 'x8', label: 'x8', border: '#3b2d6b', mult: 8 },
+              { id: 'p1', label: `${customPercents[0]}%`, border: '#ef4444', percent: customPercents[0] }, // красный
+              { id: 'p2', label: `${customPercents[1]}%`, border: '#eab308', percent: customPercents[1] }, // желтый
+              { id: 'p3', label: `${customPercents[2]}%`, border: '#22c55e', percent: customPercents[2] }, // зеленый
             ].map((btn) => {
               const isSelected = activePreset === btn.id;
               return (
                 <button
                   key={btn.id}
-                  onClick={() => applyPreset(btn.id as 'x2' | 'x4' | 'x8' | '35%' | '55%' | '75%')}
+                  onClick={() => applyPreset(btn.id, btn.percent, btn.mult)}
                   style={{
                     flex: 1,
                     padding: '8px 0',
@@ -672,7 +790,7 @@ export default function App() {
             })}
           </div>
 
-          {/* ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ: «Мой инвентарь» / «Желаемые подарки» */}
+          {/* ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ: «Инвентарь» / «Желаемый предмет» (БЕЗ ЦИФР И СКОБОК) */}
           <div
             style={{
               marginTop: '14px',
@@ -702,7 +820,7 @@ export default function App() {
                 transition: 'all 0.15s ease',
               }}
             >
-              Мой инвентарь ({userInventory.length})
+              Инвентарь
             </button>
             <button
               onClick={() => {
@@ -722,13 +840,13 @@ export default function App() {
                 transition: 'all 0.15s ease',
               }}
             >
-              Желаемые подарки ({bankVault.length})
+              Желаемый предмет
             </button>
           </div>
 
           {/* КОНТЕНТ ПОДТАБОВ */}
           <div style={{ marginTop: '14px' }}>
-            {/* ТАБ 1: МОЙ ИНВЕНТАРЬ */}
+            {/* ТАБ 1: ИНВЕНТАРЬ */}
             {subTab === 'inventory' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
@@ -752,27 +870,28 @@ export default function App() {
 
                 {userInventory.length === 0 ? (
                   <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
-                    <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '48px', height: '48px', margin: '0 auto 12px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: '700' }}>Ваш инвентарь пуст</div>
-                    <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '4px 0 12px 0' }}>
-                      Выберите подарок на витрине банка или пополните баланс
-                    </p>
+                    <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '14px' }}>Ваш инвентарь пуст</div>
                     <button
-                      onClick={() => setSubTab('targets')}
+                      onClick={() => {
+                        setActiveTab('shop');
+                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      }}
                       style={{
                         background: '#a855f7',
                         color: '#fff',
                         border: 'none',
-                        borderRadius: '14px',
-                        padding: '9px 18px',
-                        fontWeight: '700',
-                        fontSize: '12px',
+                        borderRadius: '16px',
+                        padding: '12px 24px',
+                        fontWeight: '800',
+                        fontSize: '13px',
                         cursor: 'pointer',
+                        boxShadow: '0 4px 16px rgba(168, 85, 247, 0.4)',
                       }}
                     >
-                      Выбрать цель из банка
+                      Купить предмет в магазине
                     </button>
                   </div>
                 ) : (
@@ -809,7 +928,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ТАБ 2: ЖЕЛАЕМЫЕ ПОДАРКИ (БАНК) */}
+            {/* ТАБ 2: ЖЕЛАЕМЫЙ ПРЕДМЕТ (БАНК) */}
             {subTab === 'targets' && (
               <div>
                 {bankVault.length === 0 ? (
@@ -858,6 +977,80 @@ export default function App() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛКА НАСТРОЙКИ ПРОЦЕНТОВ */}
+      {isSettingsOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '340px', background: '#130e24', borderRadius: '24px', border: '1px solid #322459', padding: '20px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontSize: '17px', fontWeight: '900', marginBottom: '6px' }}>Настройка процентов</div>
+            <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '0 0 16px 0' }}>
+              Укажите желаемые проценты для кнопок быстрого выбора (от 1% до 85%)
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1a1333', padding: '8px 12px', borderRadius: '14px', border: '1px solid #ef4444' }}>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: '#ef4444' }}>1-я кнопка (Красная):</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="85"
+                    value={tempPercents[0]}
+                    onChange={(e) => setTempPercents([e.target.value, tempPercents[1], tempPercents[2]])}
+                    style={{ width: '50px', background: '#0e091e', border: '1px solid #3b2d6b', borderRadius: '8px', color: '#fff', textAlign: 'center', padding: '4px', fontSize: '14px', fontWeight: '800', outline: 'none' }}
+                  />
+                  <span style={{ fontWeight: '800', color: '#ef4444' }}>%</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1a1333', padding: '8px 12px', borderRadius: '14px', border: '1px solid #eab308' }}>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: '#eab308' }}>2-я кнопка (Жёлтая):</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="85"
+                    value={tempPercents[1]}
+                    onChange={(e) => setTempPercents([tempPercents[0], e.target.value, tempPercents[2]])}
+                    style={{ width: '50px', background: '#0e091e', border: '1px solid #3b2d6b', borderRadius: '8px', color: '#fff', textAlign: 'center', padding: '4px', fontSize: '14px', fontWeight: '800', outline: 'none' }}
+                  />
+                  <span style={{ fontWeight: '800', color: '#eab308' }}>%</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1a1333', padding: '8px 12px', borderRadius: '14px', border: '1px solid #22c55e' }}>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: '#22c55e' }}>3-я кнопка (Зелёная):</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="85"
+                    value={tempPercents[2]}
+                    onChange={(e) => setTempPercents([tempPercents[0], tempPercents[1], e.target.value])}
+                    style={{ width: '50px', background: '#0e091e', border: '1px solid #3b2d6b', borderRadius: '8px', color: '#fff', textAlign: 'center', padding: '4px', fontSize: '14px', fontWeight: '800', outline: 'none' }}
+                  />
+                  <span style={{ fontWeight: '800', color: '#22c55e' }}>%</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: '14px', border: 'none', background: '#20163d', color: '#fff', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                style={{ flex: 1, padding: '10px 0', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)', color: '#fff', fontWeight: '800', fontSize: '13px', cursor: 'pointer' }}
+              >
+                Сохранить
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1060,7 +1253,7 @@ export default function App() {
             {/* Инвентарь в профиле */}
             <div>
               <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Инвентарь ({userInventory.length})</span>
+                <span>Инвентарь</span>
                 <span style={{ fontSize: '11px', color: '#8b7fa8' }}>Тапните для выбора</span>
               </div>
 
@@ -1084,7 +1277,7 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    Перейти в магазин
+                    Купить предмет в магазине
                   </button>
                 </div>
               ) : (
