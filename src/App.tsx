@@ -12,6 +12,7 @@ const ICONS = {
   cryptobot: '/icons/cryptobot.png',
   upgradeArrow: '/icons/upgrade-arrow.png',
   shop: '/icons/shop.png',
+  profile: '/icons/profile.png',
 };
 
 interface TgUser {
@@ -1894,7 +1895,7 @@ export default function App() {
           />
         </button>
 
-        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА (УМЕНЬШЕНА ДЛЯ КОМПАКТНОСТИ) */}
+        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА */}
         <button
           onClick={() => {
             setActiveTab('upgrade');
@@ -1928,7 +1929,7 @@ export default function App() {
           />
         </button>
 
-        {/* СПРАВА: КНОПКА ПРОФИЛЯ */}
+        {/* СПРАВА: КНОПКА ПРОФИЛЯ С ИКОНКОЙ */}
         <button
           onClick={() => {
             setIsProfileOpen(true);
@@ -1943,14 +1944,20 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#fff',
             transition: 'all 0.2s',
           }}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
+          <img
+            src={ICONS.profile}
+            alt="Профиль"
+            style={{
+              width: '24px',
+              height: '24px',
+              objectFit: 'contain',
+              display: 'block',
+              filter: isProfileOpen ? 'drop-shadow(0 0 6px rgba(234, 179, 8, 0.7))' : 'none',
+            }}
+          />
         </button>
       </div>
     </div>
