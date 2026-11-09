@@ -133,7 +133,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    // Честный пинг реального онлайна: шлём POST с userId каждые 15 секунд
+    // Честный пинг реального онлайна
     const pingOnline = () => {
       fetch('/api/online', {
         method: 'POST',
@@ -215,12 +215,10 @@ export default function App() {
     }, 3200);
   };
 
+  // Оплата звёздами (без навязчивых alert)
   const handleRealStarsPayment = async (amountStars: number) => {
     const tg = window.Telegram?.WebApp;
-    if (!tg) {
-      alert('Откройте приложение внутри Telegram');
-      return;
-    }
+    if (!tg) return;
 
     tg.HapticFeedback?.impactOccurred('medium');
 
@@ -235,11 +233,7 @@ export default function App() {
       });
 
       const data = await res.json();
-
-      if (!data.invoiceLink) {
-        alert('Ошибка генерации счета: ' + (data.error || 'Проверьте токен'));
-        return;
-      }
+      if (!data.invoiceLink) return;
 
       if (tg.openInvoice) {
         tg.openInvoice(data.invoiceLink, (status: string) => {
@@ -252,27 +246,20 @@ export default function App() {
             saveBalanceToDb(newTon);
 
             setIsDepositOpen(false);
-            alert(`✅ Баланс успешно пополнен на +${addedTon} TON!`);
           }
         });
       }
     } catch (err: unknown) {
       console.error(err);
-      alert('Ошибка соединения с платежным шлюзом');
     }
   };
 
+  // Пополнение TON через кошелек (без навязчивых alert)
   const handleRealTonDeposit = async () => {
-    if (!wallet) {
-      alert('Сначала подключите кошелек кнопкой выше!');
-      return;
-    }
+    if (!wallet) return;
 
     const amountNano = Math.floor(parseFloat(tonAmountInput) * 1e9);
-    if (isNaN(amountNano) || amountNano <= 0) {
-      alert('Введите корректную сумму TON');
-      return;
-    }
+    if (isNaN(amountNano) || amountNano <= 0) return;
 
     const transaction = {
       validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -291,21 +278,18 @@ export default function App() {
 
       setIsDepositOpen(false);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-      alert(`✅ Транзакция подтверждена! Баланс пополнен на ${tonAmountInput} TON.`);
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.5 } });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Ошибка отправки';
       console.error(errorMsg);
-      alert('Транзакция отменена в кошельке.');
     }
   };
 
+  // Оплата через CryptoBot (без alert)
   const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
     const amount = parseFloat(cryptoPayAmount);
-    if (isNaN(amount) || amount <= 0) {
-      alert('Введите корректную сумму');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) return;
 
     tg?.HapticFeedback?.impactOccurred('light');
 
@@ -324,11 +308,9 @@ export default function App() {
         } else {
           window.open(data.invoiceUrl, '_blank');
         }
-      } else {
-        alert('Ошибка создания счета: ' + (data.error || 'Проверьте токен'));
       }
-    } catch {
-      alert('Ошибка соединения с сервисом платежей');
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -392,7 +374,6 @@ export default function App() {
             Guse<span style={{ color: '#eab308' }}>Up</span>
           </div>
 
-          {/* Реальный счетчик онлайн */}
           <div
             style={{
               background: 'rgba(34, 197, 94, 0.12)',
