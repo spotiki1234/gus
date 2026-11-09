@@ -11,7 +11,7 @@ const ICONS = {
   ton: '/icons/ton.png',
   cryptobot: '/icons/cryptobot.png',
   upgradeArrow: '/icons/upgrade-arrow.png',
-  shop: 'shop.jpg',
+  shop: '/icons/shop.png',
 };
 
 interface TgUser {
