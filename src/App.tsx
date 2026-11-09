@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useTonConnectUI, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
+import { useTonConnectUI, useTonWallet, useTonAddress, TonConnectButton } from '@tonconnect/ui-react';
 import confetti from 'canvas-confetti';
 
 const RECEIVER_TON_ADDRESS = 'UQAKTkSiwZWqUDUjlydR0fxQPaPfsHbNRn0kvy8tcJwKzkrT';
@@ -67,7 +67,10 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Статистика выведенных предметов: считываем из localStorage прямо при инициализации (без синхронного setState в useEffect)
+  // Живой онлайн с естественными микро-колебаниями (например, 142..155 игроков)
+  const [onlineCount, setOnlineCount] = useState<number>(148);
+
+  // Статистика выведенных предметов из localStorage
   const [withdrawnCount] = useState<number>(() => {
     const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
     const saved = localStorage.getItem(`withdrawn_count_${userId}`);
@@ -95,6 +98,8 @@ export default function App() {
 
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
+  // Официальный хук TonConnect для красивого адреса UQ.../EQ...
+  const userFriendlyAddress = useTonAddress();
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -128,6 +133,16 @@ export default function App() {
         if (data.available_gifts) setBankVault(data.available_gifts);
       })
       .catch(() => {});
+
+    // Микро-динамика живого онлайна (каждые 12 секунд меняется на ±1..2)
+    const onlineInterval = setInterval(() => {
+      setOnlineCount((prev) => {
+        const delta = Math.floor(Math.random() * 5) - 2; // -2, -1, 0, 1, 2
+        return Math.max(120, Math.min(220, prev + delta));
+      });
+    }, 12000);
+
+    return () => clearInterval(onlineInterval);
   }, [tgUser.id]);
 
   const saveBalanceToDb = async (newTon: number) => {
@@ -331,6 +346,13 @@ export default function App() {
   const starsConvertedTon = (starsToBuy / STARS_PER_TON).toFixed(2);
   const userInitial = tgUser.first_name ? tgUser.first_name.charAt(0).toUpperCase() : 'U';
 
+  // Форматирование красивого пользовательского адреса (UQ...xxxx)
+  const displayWalletAddress = userFriendlyAddress
+    ? `${userFriendlyAddress.slice(0, 4)}...${userFriendlyAddress.slice(-4)}`
+    : wallet
+    ? `${wallet.account.address.slice(0, 4)}...${wallet.account.address.slice(-4)}`
+    : '';
+
   return (
     <div
       style={{
@@ -342,7 +364,7 @@ export default function App() {
         zoom: 0.91,
       }}
     >
-      {/* Шапка: логотип слева, Баланс и Аватарка в правом углу */}
+      {/* Шапка: логотип + статус ОНЛАЙН слева, Баланс и Аватарка справа */}
       <div
         style={{
           padding: '12px 18px',
@@ -353,14 +375,43 @@ export default function App() {
           borderBottom: '1px solid #23193d',
         }}
       >
-        <div
-          onClick={() => setActiveTab('upgrade')}
-          style={{ fontWeight: '900', fontSize: '18px', letterSpacing: '-0.4px', color: '#fff', cursor: 'pointer' }}
-        >
-          Guse<span style={{ color: '#eab308' }}>Up</span>
+        {/* Логотип + Индикатор Онлайна */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            onClick={() => setActiveTab('upgrade')}
+            style={{ fontWeight: '900', fontSize: '18px', letterSpacing: '-0.4px', color: '#fff', cursor: 'pointer' }}
+          >
+            Guse<span style={{ color: '#eab308' }}>Up</span>
+          </div>
+
+          {/* Зеленая мигающая точка и счетчик онлайн */}
+          <div
+            style={{
+              background: 'rgba(34, 197, 94, 0.12)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              borderRadius: '12px',
+              padding: '3px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <div
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: '#22c55e',
+                boxShadow: '0 0 8px #22c55e',
+              }}
+            />
+            <span style={{ fontSize: '11px', fontWeight: '800', color: '#4ade80' }}>
+              {onlineCount}
+            </span>
+          </div>
         </div>
 
-        {/* Правый блок: Баланс + Аватарка (кликабельная для открытия профиля) */}
+        {/* Правый блок: Баланс + Аватарка (кликабельная) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             onClick={() => {
@@ -696,7 +747,6 @@ export default function App() {
       {isProfileOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 110, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ width: '100%', background: '#120d24', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', padding: '20px 18px 36px 18px', borderTop: '1px solid #302257', maxHeight: '88vh', overflowY: 'auto' }}>
-            
             {/* Шапка шторки */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div style={{ fontSize: '17px', fontWeight: '800' }}>Мой профиль</div>
@@ -781,7 +831,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Блок привязки / отвязки кошелька */}
+            {/* Блок TON Кошелька (С КРАСИВЫМ UQ... АДРЕСОМ) */}
             <div style={{ background: '#171126', borderRadius: '20px', padding: '14px', border: '1px solid #271c47', marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>
                 TON Кошелек
@@ -794,8 +844,8 @@ export default function App() {
                     </div>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: '800', color: '#4ade80' }}>Кошелек привязан</div>
-                      <div style={{ fontSize: '11px', color: '#8b7fa8' }}>
-                        {wallet.account.address.slice(0, 4)}...{wallet.account.address.slice(-4)}
+                      <div style={{ fontSize: '11px', color: '#a855f7', fontWeight: '700', letterSpacing: '0.2px' }}>
+                        {displayWalletAddress}
                       </div>
                     </div>
                   </div>
