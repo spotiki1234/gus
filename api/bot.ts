@@ -19,10 +19,6 @@ bot.command('start', async (ctx) => {
       parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
         [Markup.button.webApp('🚀 Улучшить подарок', WEB_APP_URL)],
-        [
-          Markup.button.url('📢 Канал', 'https://t.me/GuseUpChannel'),
-          Markup.button.url('🏦 Банк', 'https://t.me/GuseBank')
-        ]
       ])
     });
   } catch (err) {
