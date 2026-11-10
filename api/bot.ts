@@ -1,8 +1,9 @@
 import { Telegraf, Markup } from 'telegraf';
+import type { Update } from 'telegraf/types';
 
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '9272174063:AAE6GVLKvcSZ0k8MpLm1bocgkLekwFGiYeM';
-const WEB_APP_URL = process.env.WEB_APP_URL || 'https://gus-delta-one.vercel.app/'; // ваш домен Vercel
+const WEB_APP_URL = process.env.WEB_APP_URL || 'https://gus-delta-one.vercel.app';
 
 export const bot = new Telegraf(BOT_TOKEN);
 
@@ -15,23 +16,49 @@ bot.command('start', async (ctx) => {
 
 Нажмите ниже, чтобы улучшить свой подарок <tg-emoji emoji-id="5188481279963715781">🚀</tg-emoji>`;
 
-  await ctx.reply(welcomeText, {
-    parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([
-      [Markup.button.webApp('🚀 Улучшить подарок', WEB_APP_URL)],
-      [
-        Markup.button.url('📢 Канал', 'https://t.me/GuseUpChannel'),
-        Markup.button.url('🏦 Банк', 'https://t.me/GuseBank')
-      ]
-    ])
-  });
+  try {
+    await ctx.reply(welcomeText, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.webApp('🚀 Улучшить подарок', WEB_APP_URL)],
+        [
+          Markup.button.url('📢 Канал', 'https://t.me/GuseUpChannel'),
+          Markup.button.url('🏦 Банк', 'https://t.me/GuseBank')
+        ]
+      ])
+    });
+  } catch (err) {
+    console.error('Ошибка отправки /start:', err);
+  }
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default async function handler(req: any, res: any) {
+interface RequestLike {
+  method?: string;
+  body?: Update;
+}
+
+
+interface ResponseLike {
+  status: (code: number) => {
+    json: (data: unknown) => void;
+    send: (data: string) => void;
+  };
+}
+
+
+// Хэндлер Vercel Serverless
+export default async function handler(req: RequestLike, res: ResponseLike) {
+  if (req.method === 'GET') {
+    return res.status(200).send('Bot webhook is alive and ready!');
+  }
 
   if (req.method === 'POST') {
     try {
+      if (!BOT_TOKEN) {
+        console.error('BOT_TOKEN не задан!');
+        return res.status(500).json({ error: 'BOT_TOKEN is missing' });
+      }
+
       await bot.handleUpdate(req.body);
       return res.status(200).json({ ok: true });
     } catch (err) {
@@ -39,5 +66,6 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'Failed to process update' });
     }
   }
-  return res.status(200).send('Bot webhook is active');
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
