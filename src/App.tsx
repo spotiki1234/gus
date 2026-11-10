@@ -276,9 +276,17 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
-  // Подбор цели по пресету процента/множителя
+  // Подбор цели по пресету процента/множителя (с функцией отмены при повторном клике)
   const applyPreset = (presetId: string, percentVal?: number, multiplierVal?: number) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+
+    // Если кликнули по уже выбранному пресету — сбрасываем выбор
+    if (activePreset === presetId) {
+      setActivePreset(null);
+      setSelectedTarget(null);
+      return;
+    }
+
     setActivePreset(presetId);
 
     if (!selectedSource || bankVault.length === 0) {
@@ -808,7 +816,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* ПАНЕЛЬ БЫСТРОГО ПОДБОРА (НАСТРАИВАЕМЫЕ X И %) */}
+          {/* ПАНЕЛЬ БЫСТРОГО ПОДБОРА (НАСТРАИВАЕМЫЕ X И % С ОТМЕНОЙ ВЫБОРА) */}
           <div
             style={{
               display: 'flex',
@@ -834,13 +842,14 @@ export default function App() {
                     flex: 1,
                     padding: '8px 0',
                     borderRadius: '20px',
-                    background: isSelected ? 'rgba(255,255,255,0.12)' : '#140f26',
+                    background: isSelected ? 'rgba(255,255,255,0.14)' : '#140f26',
                     border: isSelected ? `2px solid ${btn.border}` : `1px solid ${btn.border}`,
                     color: isSelected ? '#fff' : '#9ca3af',
                     fontSize: '12px',
                     fontWeight: '800',
                     cursor: 'pointer',
-                    boxShadow: isSelected ? `0 0 10px ${btn.border}` : 'none',
+                    boxShadow: isSelected ? `0 0 12px ${btn.border}` : 'none',
+                    transform: isSelected ? 'scale(1.03)' : 'scale(1)',
                     transition: 'all 0.15s ease',
                   }}
                 >
