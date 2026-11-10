@@ -1,6 +1,4 @@
 import { Telegraf, Markup } from 'telegraf';
-import type { Update } from 'telegraf/types';
-
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '9272174063:AAE6GVLKvcSZ0k8MpLm1bocgkLekwFGiYeM';
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://gus-delta-one.vercel.app';
@@ -34,9 +32,8 @@ bot.command('start', async (ctx) => {
 
 interface RequestLike {
   method?: string;
-  body?: Update;
+  body?: unknown;
 }
-
 
 interface ResponseLike {
   status: (code: number) => {
@@ -45,8 +42,6 @@ interface ResponseLike {
   };
 }
 
-
-// Хэндлер Vercel Serverless
 export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method === 'GET') {
     return res.status(200).send('Bot webhook is alive and ready!');
@@ -55,11 +50,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method === 'POST') {
     try {
       if (!BOT_TOKEN) {
-        console.error('BOT_TOKEN не задан!');
         return res.status(500).json({ error: 'BOT_TOKEN is missing' });
       }
 
-      await bot.handleUpdate(req.body);
+      await bot.handleUpdate(req.body as Parameters<typeof bot.handleUpdate>[0]);
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error('Bot update error:', err);
