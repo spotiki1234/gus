@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTonConnectUI, useTonWallet, useTonAddress, TonConnectButton } from '@tonconnect/ui-react';
 import confetti from 'canvas-confetti';
 
@@ -137,14 +137,27 @@ export default function App() {
   // Шторки
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
-  const [depositStep, setDepositStep] = useState<'methods' | 'stars' | 'wallet' | 'cryptobot'>('methods');
+  const [depositStep, setDepositStep] = useState<'methods' | 'gifts' | 'stars' | 'wallet' | 'cryptobot'>('methods');
   const [tonAmountInput, setTonAmountInput] = useState('1.0');
   const [cryptoPayAmount, setCryptoPayAmount] = useState('1.0');
   const [starsToBuy, setStarsToBuy] = useState(111);
+  const [isCheckingInventory, setIsCheckingInventory] = useState(false);
 
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
   const userFriendlyAddress = useTonAddress();
+
+  const loadInventory = useCallback(() => {
+    if (!tgUser.id) return;
+    setIsCheckingInventory(true);
+    fetch(`/api/inventory/${tgUser.id}`)
+      .then((res) => res.json())
+      .then((data: { items?: BankGift[] }) => {
+        if (data.items) setUserInventory(data.items);
+      })
+      .catch(() => {})
+      .finally(() => setIsCheckingInventory(false));
+  }, [tgUser.id]);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -276,11 +289,10 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
-  // Подбор цели по пресету процента/множителя (с функцией отмены при повторном клике)
+  // Подбор цели по пресету (второй клик отменяет выбор)
   const applyPreset = (presetId: string, percentVal?: number, multiplierVal?: number) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
-    // Если кликнули по уже выбранному пресету — сбрасываем выбор
     if (activePreset === presetId) {
       setActivePreset(null);
       setSelectedTarget(null);
@@ -492,7 +504,7 @@ export default function App() {
         }
       `}</style>
 
-      {/* ЗАКРУГЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ (БЕЗ ЛОГОТИПА) */}
+      {/* ЗАКРУГЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ */}
       <div style={{ padding: '12px 14px 0 14px' }}>
         <div
           style={{
@@ -507,7 +519,7 @@ export default function App() {
             boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
           }}
         >
-          {/* Слева: красивый индикатор онлайна */}
+          {/* Онлайн */}
           <div
             style={{
               background: 'rgba(34, 197, 94, 0.12)',
@@ -533,7 +545,7 @@ export default function App() {
             </span>
           </div>
 
-          {/* Справа: Баланс + Аватарка */}
+          {/* Баланс + Аватарка */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
               onClick={() => {
@@ -610,7 +622,7 @@ export default function App() {
         <div style={{ padding: '16px 18px 10px 18px' }}>
           <div style={{ position: 'relative', background: '#130e24', borderRadius: '26px', border: '1px solid #271c47', padding: '22px 14px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
             
-            {/* ВЕРХ СЛЕВА: КНОПКА МОЛНИИ И НАСТРОЕК */}
+            {/* Кнопки молнии и шестерёнки */}
             <div
               style={{
                 position: 'absolute',
@@ -622,7 +634,6 @@ export default function App() {
                 zIndex: 10,
               }}
             >
-              {/* Молния (быстрая крутка) */}
               <button
                 onClick={toggleFastSpin}
                 title={isFastSpin ? 'Быстрая крутка включена' : 'Быстрая крутка выключена'}
@@ -647,7 +658,6 @@ export default function App() {
                 </svg>
               </button>
 
-              {/* Шестерёнка (открывает окно «Быстрый подбор») */}
               <button
                 onClick={() => {
                   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -716,7 +726,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Карточки апгрейда: Исходный предмет -> Цель */}
+            {/* Карточки апгрейда */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
               <div
                 onClick={() => setSubTab('inventory')}
@@ -745,7 +755,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Стилизованная неоновая стрелка направления */}
               <div
                 style={{
                   width: '32px',
@@ -816,7 +825,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* ПАНЕЛЬ БЫСТРОГО ПОДБОРА (НАСТРАИВАЕМЫЕ X И % С ОТМЕНОЙ ВЫБОРА) */}
+          {/* Пресеты с возможностью отмены кликом */}
           <div
             style={{
               display: 'flex',
@@ -859,7 +868,7 @@ export default function App() {
             })}
           </div>
 
-          {/* ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ: «Инвентарь» / «Желаемый предмет» */}
+          {/* Инвентарь / Желаемый предмет */}
           <div
             style={{
               marginTop: '14px',
@@ -913,9 +922,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* КОНТЕНТ ПОДТАБОВ */}
           <div style={{ marginTop: '14px' }}>
-            {/* ТАБ 1: ИНВЕНТАРЬ */}
             {subTab === 'inventory' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
@@ -997,7 +1004,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ТАБ 2: ЖЕЛАЕМЫЙ ПРЕДМЕТ (БАНК) */}
             {subTab === 'targets' && (
               <div>
                 {bankVault.length === 0 ? (
@@ -1074,7 +1080,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* БЛОК 1: НАСТРОЙКА КОЭФФИЦИЕНТА X */}
             <div style={{ background: '#171126', borderRadius: '22px', padding: '16px', border: '1px solid #271c47', marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '600', marginBottom: '14px', lineHeight: '1.4' }}>
                 Настройте кнопки для быстрого подбора коэффициента
@@ -1143,7 +1148,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* БЛОК 2: НАСТРОЙКА ПРОЦЕНТОВ % */}
             <div style={{ background: '#171126', borderRadius: '22px', padding: '16px', border: '1px solid #271c47', marginBottom: '20px' }}>
               <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '600', marginBottom: '14px', lineHeight: '1.4' }}>
                 Настройте кнопки для быстрого подбора процента
@@ -1218,7 +1222,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Кнопка сохранить */}
             <button
               onClick={handleSaveSettings}
               style={{
@@ -1315,7 +1318,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Карточка профиля */}
             <div style={{ background: 'linear-gradient(135deg, #1b1338 0%, #130d29 100%)', borderRadius: '22px', padding: '16px', border: '1px solid #33235d', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
                 <div
@@ -1377,7 +1379,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Кошелёк */}
             <div style={{ background: '#171126', borderRadius: '20px', padding: '14px', border: '1px solid #271c47', marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>
                 TON Кошелек
@@ -1419,7 +1420,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Статистика */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
               <div style={{ background: '#171126', borderRadius: '18px', padding: '12px 14px', border: '1px solid #271c47' }}>
                 <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Выведено предметов</div>
@@ -1435,7 +1435,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Инвентарь в профиле */}
             <div>
               <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Инвентарь</span>
@@ -1515,6 +1514,7 @@ export default function App() {
                 )}
                 <div style={{ fontSize: '16px', fontWeight: '800' }}>
                   {depositStep === 'methods' && 'Способ пополнения'}
+                  {depositStep === 'gifts' && 'Пополнение подарками'}
                   {depositStep === 'wallet' && 'Пополнение через TON'}
                   {depositStep === 'stars' && 'Оплата звёздами'}
                   {depositStep === 'cryptobot' && 'Пополнение CryptoBot'}
@@ -1538,8 +1538,37 @@ export default function App() {
               </button>
             </div>
 
+            {/* СПИСОК СПОСОБОВ ПОПОЛНЕНИЯ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* 1. ПОПОЛНЕНИЕ ПОДАРКАМИ */}
+                <div
+                  onClick={() => setDepositStep('gifts')}
+                  style={{
+                    background: '#1b1436',
+                    padding: '12px 14px',
+                    borderRadius: '18px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    border: '1.5px solid #a855f7',
+                    boxShadow: '0 0 12px rgba(168, 85, 247, 0.25)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={ICONS.gift} alt="Подарки" style={{ width: '22px', height: '22px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#c084fc' }}>Подарки Telegram</div>
+                      <div style={{ fontSize: '10px', color: '#8b7fa8' }}>Отправьте подарок на @GuseBank</div>
+                    </div>
+                  </div>
+                  <span style={{ color: '#c084fc', fontSize: '18px' }}>›</span>
+                </div>
+
+                {/* 2. ЗВЁЗДЫ */}
                 <div
                   onClick={() => setDepositStep('stars')}
                   style={{
@@ -1565,6 +1594,7 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
+                {/* 3. TON CONNECT */}
                 <div
                   onClick={() => setDepositStep('wallet')}
                   style={{
@@ -1590,6 +1620,7 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
+                {/* 4. CRYPTOBOT */}
                 <div
                   onClick={() => {
                     setDepositStep('cryptobot');
@@ -1620,6 +1651,77 @@ export default function App() {
               </div>
             )}
 
+            {/* ЭКРАН ПОПОЛНЕНИЯ ПОДАРКАМИ */}
+            {depositStep === 'gifts' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '60px', height: '60px', margin: '0 auto 10px auto', background: 'rgba(168, 85, 247, 0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #a855f7' }}>
+                  <img src={ICONS.gift} alt="Подарки" style={{ width: '32px', height: '32px' }} />
+                </div>
+                <div style={{ fontSize: '17px', fontWeight: '800' }}>Пополнение подарками</div>
+                <p style={{ fontSize: '12px', color: '#8b7fa8', margin: '6px 0 16px 0', lineHeight: '1.4' }}>
+                  Отправьте любой подарок со своего профиля на наш аккаунт банка <b>@GuseBank</b>.
+                </p>
+
+                <div style={{ background: '#171126', borderRadius: '18px', padding: '14px', border: '1px solid #271c47', textAlign: 'left', marginBottom: '18px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '800', color: '#eab308', marginBottom: '8px' }}>Инструкция:</div>
+                  <div style={{ fontSize: '11px', color: '#9ca3af', lineHeight: '1.5' }}>
+                    1. Нажмите кнопку ниже для перехода к <b>@GuseBank</b><br />
+                    2. В его профиле выберите «Отправить подарок»<br />
+                    3. После отправки вернитесь сюда и нажмите «Проверить зачисление»
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    onClick={() => {
+                      const tg = window.Telegram?.WebApp;
+                      if (tg?.openTelegramLink) {
+                        tg.openTelegramLink('https://t.me/GuseBank');
+                      } else {
+                        window.open('https://t.me/GuseBank', '_blank');
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '18px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
+                      color: '#fff',
+                      fontWeight: '800',
+                      fontSize: '15px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 18px rgba(168, 85, 247, 0.4)',
+                    }}
+                  >
+                    🎁 Открыть профиль @GuseBank
+                  </button>
+
+                  <button
+                    disabled={isCheckingInventory}
+                    onClick={() => {
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+                      loadInventory();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '18px',
+                      border: '1px solid #3b2d6b',
+                      background: '#171126',
+                      color: '#eab308',
+                      fontWeight: '800',
+                      fontSize: '13px',
+                      cursor: isCheckingInventory ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isCheckingInventory ? 'Проверяем...' : '🔄 Проверить зачисление'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ЗВЁЗДЫ */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1711,6 +1813,7 @@ export default function App() {
               </div>
             )}
 
+            {/* CRYPTOBOT */}
             {depositStep === 'cryptobot' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1787,6 +1890,7 @@ export default function App() {
               </div>
             )}
 
+            {/* WALLET */}
             {depositStep === 'wallet' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', borderRadius: '14px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -1853,7 +1957,7 @@ export default function App() {
         </div>
       )}
 
-      {/* КОМПАКТНАЯ ПОЛУПРОЗРАЧНАЯ НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <div
         style={{
           position: 'fixed',
@@ -1873,7 +1977,6 @@ export default function App() {
           zIndex: 50,
         }}
       >
-        {/* КНОПКА МАГАЗИНА С ИКОНКОЙ */}
         <button
           onClick={() => {
             setActiveTab('shop');
@@ -1904,7 +2007,6 @@ export default function App() {
           />
         </button>
 
-        {/* ЦЕНТРАЛЬНАЯ КНОПКА АПГРЕЙДА */}
         <button
           onClick={() => {
             setActiveTab('upgrade');
@@ -1938,7 +2040,6 @@ export default function App() {
           />
         </button>
 
-        {/* СПРАВА: КНОПКА ПРОФИЛЯ С ИКОНКОЙ */}
         <button
           onClick={() => {
             setIsProfileOpen(true);
