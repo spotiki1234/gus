@@ -55,6 +55,45 @@ interface BankGift {
   backdrop_name?: string;
 }
 
+/**
+ * АВТОМАТИЧЕСКИЙ НОРМАЛИЗАТОР ССЫЛОК НА ПОДАРКИ:
+ * Превращает ЛЮБЫЕ ссылки (t.me/i/nft/..., t.me/nft/..., fragment.com, пустые строки)
+ * в гарантированно рабочую прямую ссылку на официальный CDN картинок Fragment (nft.fragment.com).
+ * Благодаря этой функции картинка отобразится ВСЕГДА, даже если в базе ссылка кривая!
+ */
+export function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
+  const cleanSlug = (slug || '').trim();
+  let url = (rawUrl || '').trim();
+
+  // Если URL вообще не указан, но есть slug (например: LolPop-401733)
+  if (!url && cleanSlug) {
+    return `https://nft.fragment.com/gift/${cleanSlug}.webp`;
+  }
+
+  // Если передали кривую ссылку через Telegram (https://t.me/i/nft/... или https://t.me/nft/...)
+  if (url.includes('t.me/i/nft/') || url.includes('t.me/nft/')) {
+    const extracted = url.split('/').pop()?.replace(/\.(png|webp|jpg|jpeg)$/i, '') || cleanSlug;
+    if (extracted) {
+      return `https://nft.fragment.com/gift/${extracted}.webp`;
+    }
+  }
+
+  // Если передали страницу Fragment вместо прямой картинки
+  if (url.includes('fragment.com/gift/') && !url.includes('nft.fragment.com')) {
+    const extracted = url.split('/').pop()?.replace(/\.(png|webp|jpg|jpeg)$/i, '') || cleanSlug;
+    if (extracted) {
+      return `https://nft.fragment.com/gift/${extracted}.webp`;
+    }
+  }
+
+  // Если ввели просто название и номер без http (например: LolPop-401733)
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+    return `https://nft.fragment.com/gift/${url.replace(/\.(png|webp|jpg|jpeg)$/i, '')}.webp`;
+  }
+
+  return url || '/icons/gift.png';
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'upgrade' | 'shop'>('upgrade');
 
@@ -110,7 +149,7 @@ export default function App() {
     return [35, 55, 75];
   });
 
-  // Фильтры и сортировка в магазине (как на втором фото)
+  // Фильтры и сортировка в магазине (как на фото)
   const [shopSortOrder, setShopSortOrder] = useState<'asc' | 'desc'>('asc');
   const [shopFilterType, setShopFilterType] = useState<string>('all');
   const [shopFilterModel, setShopFilterModel] = useState<string>('all');
@@ -701,10 +740,15 @@ export default function App() {
           </div>
 
           <img
-            src={gift.image_url}
+            src={getDirectGiftImageUrl(gift.image_url, gift.slug)}
             alt={gift.name}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/icons/gift.png';
+              const img = e.currentTarget;
+              if (img.src.endsWith('.webp')) {
+                img.src = img.src.replace('.webp', '.png');
+              } else if (!img.src.includes('/icons/gift.png')) {
+                img.src = '/icons/gift.png';
+              }
             }}
             style={{
               width: '100%',
@@ -756,9 +800,9 @@ export default function App() {
   /**
    * КАРТОЧКА МАГАЗИНА (ТОЧНО КАК НА ВТОРОМ ФОТО):
    * - Тёмный контейнер с крупным скруглением
-   * - Внутри сверху квадратная картинка подарка с собственным цветным фоном
-   * - Под ней: жирное белое название (Heart Locket) и серый серийный номер (#1515)
-   * - Снизу ярко-синяя крупная овальная кнопка с ценой и символом TON (1742.45 💎/TON)
+   * - Квадратная картинка подарка с цветным фоном
+   * - Жирное белое название и серый номер
+   * - Ярко-синяя овальная кнопка с ценой и символом TON
    */
   const renderMarketplaceCard = (gift: BankGift) => {
     return (
@@ -775,7 +819,6 @@ export default function App() {
           position: 'relative',
         }}
       >
-        {/* Изображение подарка с собственным цветным фоном и мягкими скруглёнными углами */}
         <div
           style={{
             width: '100%',
@@ -791,10 +834,15 @@ export default function App() {
           }}
         >
           <img
-            src={gift.image_url}
+            src={getDirectGiftImageUrl(gift.image_url, gift.slug)}
             alt={gift.name}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/icons/gift.png';
+              const img = e.currentTarget;
+              if (img.src.endsWith('.webp')) {
+                img.src = img.src.replace('.webp', '.png');
+              } else if (!img.src.includes('/icons/gift.png')) {
+                img.src = '/icons/gift.png';
+              }
             }}
             style={{
               width: '100%',
@@ -805,7 +853,6 @@ export default function App() {
           />
         </div>
 
-        {/* Название подарка и номер #1515 */}
         <div style={{ textAlign: 'left', padding: '0 4px', marginBottom: '10px' }}>
           <div
             style={{
@@ -833,7 +880,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Синяя кнопка покупки с ценой и иконкой TON */}
         <button
           onClick={() => handleBuyGiftInShop(gift)}
           style={{
@@ -871,19 +917,21 @@ export default function App() {
   };
 
   /**
-   * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА (КАК НА ПЕРВОМ СКРИНШОТЕ Heart Locket):
-   * - Фон подарка растянут на весь слот 100% (object-fit: cover)
-   * - Сверху по центру овальная плашка с ценой и иконкой ton.png
-   * - Снизу внутри карточки парящая капсула с названием подарка и серым серийным номером
+   * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА:
    */
   const renderArenaGiftCard = (gift: BankGift, extraSubText?: string) => {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: '22px' }}>
         <img
-          src={gift.image_url}
+          src={getDirectGiftImageUrl(gift.image_url, gift.slug)}
           alt={gift.name}
           onError={(e) => {
-            (e.target as HTMLImageElement).src = '/icons/gift.png';
+            const img = e.currentTarget;
+            if (img.src.endsWith('.webp')) {
+              img.src = img.src.replace('.webp', '.png');
+            } else if (!img.src.includes('/icons/gift.png')) {
+              img.src = '/icons/gift.png';
+            }
           }}
           style={{
             position: 'absolute',
@@ -2006,11 +2054,11 @@ export default function App() {
         </div>
       )}
 
-      {/* МАГАЗИН БАНКА (ПОЛНОСТЬЮ ОБНОВЛЁННЫЙ В СТИЛЕ ВТОРОГО ФОТО) */}
+      {/* МАГАЗИН БАНКА */}
       {activeTab === 'shop' && (
         <div style={{ padding: '16px 14px 10px 14px' }}>
           
-          {/* ВЕРХНЯЯ ПАНЕЛЬ ФИЛЬТРОВ И СОРТИРОВКИ (КАК НА ВТОРОМ ФОТО: ⇅ | Тип ⌄ | Скин ⌄ | Фон ⌄) */}
+          {/* ВЕРХНЯЯ ПАНЕЛЬ ФИЛЬТРОВ И СОРТИРОВКИ */}
           <div
             style={{
               display: 'flex',
@@ -2021,7 +2069,7 @@ export default function App() {
               paddingBottom: '4px',
             }}
           >
-            {/* Кнопка сортировки по цене (стрелки вверх/вниз) */}
+            {/* Кнопка сортировки по цене */}
             <button
               onClick={() => {
                 window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -2223,7 +2271,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* СПИСОК КАРТОЧЕК В МАГАЗИНЕ (3 В РЯД, СТИЛЬ ФОТО 2) */}
+          {/* СПИСОК КАРТОЧЕК В МАГАЗИНЕ */}
           {filteredShopGifts.length === 0 ? (
             <div style={{ background: '#171126', borderRadius: '24px', padding: '32px 18px', textAlign: 'center', border: '1px solid #271c47', marginTop: '10px' }}>
               <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
