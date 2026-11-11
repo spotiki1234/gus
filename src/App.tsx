@@ -561,7 +561,11 @@ export default function App() {
     : '#181424';
 
   /**
-   * КАРТОЧКА ПОДАРКА В ДИЗАЙНЕ TELEGRAM GIFTS (КАК НА ВТОРОМ ФОТО)
+   * КАРТОЧКА ПОДАРКА В ТОЧНОМ ДИЗАЙНЕ TELEGRAM GIFTS (КАК НА ФОТО):
+   * - Изображение подарка занимает всю верхнюю область карточки (object-fit: cover) вместе с его фоном
+   * - Стеклянная плашка цены 💎 8.00 поверх картинки слева сверху
+   * - Нижняя тёмная плашка с жирным белым названием и серым номером
+   * - Золотая рамка при выборе карточки
    */
   const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
     return (
@@ -570,40 +574,49 @@ export default function App() {
         onClick={onSelect}
         style={{
           position: 'relative',
-          borderRadius: '24px',
-          background: '#6d756d',
-          backgroundImage: `
-            radial-gradient(#5a625a 1.2px, transparent 1.2px),
-            linear-gradient(145deg, #788078 0%, #5e665e 100%)
-          `,
-          backgroundSize: '16px 16px, 100% 100%',
+          borderRadius: '20px',
+          background: '#120d22',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
           cursor: 'pointer',
-          border: isSelected ? '2px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
+          border: isSelected ? '2px solid #eab308' : '1px solid rgba(255,255,255,0.08)',
           boxShadow: isSelected
-            ? '0 0 16px rgba(234, 179, 8, 0.5), 0 8px 20px rgba(0,0,0,0.45)'
-            : '0 6px 16px rgba(0,0,0,0.3)',
+            ? '0 0 16px rgba(234, 179, 8, 0.45), 0 8px 20px rgba(0,0,0,0.5)'
+            : '0 4px 14px rgba(0,0,0,0.3)',
           transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
           transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-          minHeight: '148px',
         }}
       >
-        {/* Верхняя часть: стеклянный бейдж цены */}
-        <div style={{ padding: '8px 8px 0 8px', display: 'flex', justifyContent: 'flex-start', zIndex: 3 }}>
+        {/* Верхняя часть: изображение подарка на всю область карточки */}
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '110px',
+            background: '#1a1333',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* Стеклянный бейдж цены поверх изображения (слева сверху) */}
           <div
             style={{
-              background: 'rgba(20, 20, 24, 0.72)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              borderRadius: '16px',
-              padding: '4px 9px',
+              position: 'absolute',
+              top: '7px',
+              left: '7px',
+              background: 'rgba(18, 14, 28, 0.78)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              borderRadius: '14px',
+              padding: '3px 8px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+              gap: '4px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              zIndex: 3,
             }}
           >
             <span style={{ fontSize: '11px' }}>💎</span>
@@ -611,19 +624,8 @@ export default function App() {
               {gift.price_ton}
             </span>
           </div>
-        </div>
 
-        {/* Центр: Крупный подарок */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '4px 6px',
-            position: 'relative',
-          }}
-        >
+          {/* Изображение подарка со своим фоном растягивается на всю карточку */}
           <img
             src={gift.image_url}
             alt={gift.name}
@@ -631,22 +633,18 @@ export default function App() {
               (e.target as HTMLImageElement).src = '/icons/gift.png';
             }}
             style={{
-              width: '74px',
-              height: '74px',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.45))',
-              transition: 'transform 0.18s ease',
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
               display: 'block',
             }}
           />
         </div>
 
-        {/* Нижняя часть: закруглённая тёмная подложка с названием и номером */}
+        {/* Нижняя часть: закруглённая тёмная плашка с названием и номером */}
         <div
           style={{
-            background: 'rgba(16, 14, 22, 0.94)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
+            background: '#120d22',
             padding: '8px 10px 9px 10px',
             borderTop: '1px solid rgba(255,255,255,0.06)',
             textAlign: 'left',
