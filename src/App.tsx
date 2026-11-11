@@ -135,7 +135,7 @@ export default function App() {
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [spinAngle, setSpinAngle] = useState(0);
+  const [wheelRotation, setWheelRotation] = useState<number>(0);
 
   // Шторки
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -274,6 +274,14 @@ export default function App() {
 
   const chance = calculateChance();
 
+  // Подпись сложности шанса
+  const getChanceLabel = (c: number): string => {
+    if (c <= 0) return 'Ожидание';
+    if (c < 25) return 'Низкий шанс';
+    if (c <= 60) return 'Средний шанс';
+    return 'Высокий шанс';
+  };
+
   // Быстрая крутка (молния)
   const toggleFastSpin = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
@@ -325,23 +333,20 @@ export default function App() {
   const handlePresetClick = (presetId: string) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
-    // Повторный клик снимает выбор
     if (activePreset === presetId) {
       setActivePreset(null);
       return;
     }
 
-    // Если ставки ещё нет, автоматически выставляем 25% на полоске
     if (totalBetAmount <= 0 && balanceTon > 0) {
       setBalanceSliderPercent(25);
     }
 
-    // При выборе коэффициента целью становится баланс TON
     setActivePreset(presetId);
     setSelectedTarget(null);
   };
 
-  // Апгрейд
+  // Апгрейд (крутится сектор колеса, стрелка снизу на 6 часах указывает на результат)
   const handleUpgrade = () => {
     if (isSpinning || chance <= 0 || totalBetAmount <= 0 || targetPriceTon <= totalBetAmount) return;
 
@@ -356,20 +361,25 @@ export default function App() {
     const roll = Math.random() * 100;
     const isWin = roll < chance;
 
-    const winAngle = chance * 3.6;
-    const stopAngle = isWin ? Math.random() * winAngle : winAngle + Math.random() * (360 - winAngle);
-    
-    const extraRotations = isFastSpin ? 720 : 1800;
+    // Вращение колеса так, чтобы нижняя стрелка (180°) попала либо в оранжевую выигрышную зону, либо в темную проигрышную
+    const sectorSpan = (chance / 100) * 360;
+    // Оранжевый сектор центрирован внизу (от -sectorSpan/2 до +sectorSpan/2 относительно 180°)
+    const offsetInSector = isWin
+      ? (Math.random() - 0.5) * (sectorSpan * 0.9)
+      : 180 + (Math.random() - 0.5) * ((360 - sectorSpan) * 0.9);
+
+    const extraFullSpins = isFastSpin ? 360 * 3 : 360 * 6;
+    const nextRotation = wheelRotation + extraFullSpins + offsetInSector;
+    setWheelRotation(nextRotation);
+
     const spinDuration = isFastSpin ? 800 : 3200;
 
-    // Списываем поставленный баланс (если была ставка с баланса)
+    // Списываем поставленный баланс
     let currentBal = balanceTon;
     if (balanceBetTon > 0) {
       currentBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
       saveBalanceToDb(currentBal);
     }
-
-    setSpinAngle((prev) => prev + extraRotations + stopAngle);
 
     setTimeout(() => {
       setIsSpinning(false);
@@ -377,7 +387,6 @@ export default function App() {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
 
-        // Если целью был баланс TON (по кнопкам коэффициентов/процентов)
         if (activePreset && targetBalanceTon > 0) {
           const updatedBal = Number((currentBal + targetBalanceTon).toFixed(2));
           saveBalanceToDb(updatedBal);
@@ -386,7 +395,6 @@ export default function App() {
             setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
           }
         } else if (selectedTarget) {
-          // Если целью был подарок
           if (selectedSource) {
             setUserInventory((prev) => [
               ...prev.filter((i) => i.id !== selectedSource.id),
@@ -535,6 +543,14 @@ export default function App() {
 
   const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
+
+  // Расчёт конического градиента для оранжевого сектора шанса
+  const halfPercent = chance > 0 ? chance / 2 : 0;
+  const startP = 50 - halfPercent;
+  const endP = 50 + halfPercent;
+  const wheelConic = chance > 0
+    ? `conic-gradient(from 0deg, #181424 0%, #181424 ${startP}%, #ffb703 ${startP}%, #fb8500 50%, #ffb703 ${endP}%, #181424 ${endP}%, #181424 100%)`
+    : '#181424';
 
   return (
     <div
@@ -781,41 +797,175 @@ export default function App() {
               </button>
             </div>
 
-            {/* Круговая рулетка */}
-            <div style={{ position: 'relative', width: '136px', height: '136px', margin: '0 auto 14px auto' }}>
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: chance > 0 ? `conic-gradient(#a855f7 0% ${chance}%, #1f1738 ${chance}% 100%)` : '#1f1738',
-                  boxShadow: '0 0 18px rgba(168, 85, 247, 0.25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', background: '#090514', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: '22px', fontWeight: '900', color: chance > 0 ? '#c084fc' : '#5b4d7a' }}>{chance}%</div>
-                  <span style={{ fontSize: '9px', color: '#8b7fa8', fontWeight: '700' }}>ШАНС</span>
-                </div>
-              </div>
-
+            {/* НОВОЕ КОЛЕСО РУЛЕТКИ (В ТОЧНОСТИ КАК НА СКРИНШОТЕ) */}
+            <div
+              style={{
+                position: 'relative',
+                width: '210px',
+                height: '210px',
+                margin: '0 auto 16px auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {/* Метки 50% слева и справа снаружи */}
               <div
                 style={{
                   position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  transform: `rotate(${spinAngle}deg)`,
+                  left: '-18px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  color: '#4b4363',
+                  userSelect: 'none',
+                }}
+              >
+                50%
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  right: '-18px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  color: '#4b4363',
+                  userSelect: 'none',
+                }}
+              >
+                50%
+              </div>
+
+              {/* Внешнее тонкое кольцо с оранжевой обводкой снизу */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: '202px',
+                  height: '202px',
+                  borderRadius: '50%',
+                  border: '1.5px solid #231c38',
+                  borderBottom: chance > 0 ? '2px solid #ff7b00' : '1.5px solid #231c38',
+                  boxShadow: chance > 0 ? '0 0 18px rgba(255, 123, 0, 0.35)' : 'none',
+                  pointerEvents: 'none',
+                  transition: 'border-bottom 0.3s, box-shadow 0.3s',
+                }}
+              />
+
+              {/* Вращающийся диск со световым сектором */}
+              <div
+                style={{
+                  width: '184px',
+                  height: '184px',
+                  borderRadius: '50%',
+                  background: wheelConic,
+                  boxShadow: chance > 0 ? 'inset 0 0 20px rgba(0,0,0,0.8), 0 0 24px rgba(255, 133, 0, 0.25)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transform: `rotate(${wheelRotation}deg)`,
                   transition: isSpinning
                     ? `transform ${isFastSpin ? '0.8s cubic-bezier(0.1, 0.9, 0.2, 1)' : '3.2s cubic-bezier(0.12, 0.8, 0.2, 1)'}`
                     : 'none',
+                }}
+              >
+                {/* Внутренняя темная сердцевина */}
+                <div
+                  style={{
+                    width: '128px',
+                    height: '128px',
+                    borderRadius: '50%',
+                    background: '#0d091a',
+                    boxShadow: '0 0 18px rgba(0,0,0,0.9), inset 0 0 12px rgba(0,0,0,0.8)',
+                    transform: `rotate(${-wheelRotation}deg)`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '26px',
+                      fontWeight: '900',
+                      color: '#ffffff',
+                      letterSpacing: '-0.5px',
+                      lineHeight: '1.1',
+                    }}
+                  >
+                    {chance > 0 ? `${chance.toFixed(2)}%` : '0%'}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: '#8b839e',
+                      fontWeight: '600',
+                      marginTop: '4px',
+                    }}
+                  >
+                    {getChanceLabel(chance)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Неподвижная стрелка-указатель снизу на 6 часах */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '-2px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  zIndex: 5,
                   pointerEvents: 'none',
                 }}
               >
-                <div style={{ width: '4px', height: '20px', background: '#eab308', margin: '0 auto', borderRadius: '4px', boxShadow: '0 0 10px #eab308' }} />
+                {/* Острие стрелки вверх в сектор */}
+                <div
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderLeft: '5px solid transparent',
+                    borderRight: '5px solid transparent',
+                    borderBottom: '9px solid #ffb703',
+                    filter: 'drop-shadow(0 0 6px rgba(255, 183, 3, 0.8))',
+                  }}
+                />
+                {/* Линия стрелки */}
+                <div
+                  style={{
+                    width: '2px',
+                    height: '14px',
+                    background: '#ffb703',
+                    boxShadow: '0 0 6px #ffb703',
+                  }}
+                />
+                {/* Точка на ободе */}
+                <div
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#ffb703',
+                    boxShadow: '0 0 8px #ffb703',
+                    marginTop: '-2px',
+                  }}
+                />
+                {/* Подпись 0% под стрелкой */}
+                <div
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    color: '#8b839e',
+                    marginTop: '2px',
+                  }}
+                >
+                  0%
+                </div>
               </div>
             </div>
 
@@ -1053,7 +1203,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* КНОПКИ КОЭФФИЦИЕНТОВ И ПРОЦЕНТОВ — ВЫБИРАЮТ ЦЕЛЬ В TON */}
+          {/* КНОПКИ КОЭФФИЦИЕНТОВ И ПРОЦЕНТОВ */}
           <div
             style={{
               display: 'flex',
@@ -1256,7 +1406,7 @@ export default function App() {
                         <div
                           key={gift.id}
                           onClick={() => {
-                            setActivePreset(null); // сбрасываем цель в виде TON, переключаемся на подарок
+                            setActivePreset(null);
                             setSelectedTarget(gift);
                             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                           }}
