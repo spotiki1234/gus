@@ -363,19 +363,14 @@ export default function App() {
     const roll = Math.random() * 100;
     const isWin = roll < chance;
 
-    // Сектор шанса центрирован строго внизу: от -sectorSpan/2 до +sectorSpan/2 (то есть [360 - halfSpan; 360] и [0; halfSpan])
     const sectorSpan = (chance / 100) * 360;
     const halfSpan = sectorSpan / 2;
     const padding = Math.min(3, sectorSpan * 0.05);
 
-    // Вычисляем целевой угол стрелки:
-    // Зона победы: в пределах [-halfSpan + padding; halfSpan - padding] относительно низа (0°).
-    // Зона проигрыша: в верхней темной области [halfSpan + padding; 360 - halfSpan - padding].
     const targetAngle = isWin
       ? (Math.random() - 0.5) * (sectorSpan - padding * 2)
       : halfSpan + padding + Math.random() * ((360 - sectorSpan) - padding * 2);
 
-    // Нормализуем текущий угол и доворачиваем по часовой стрелке
     const normalizedTarget = (targetAngle % 360 + 360) % 360;
     const currentMod = (arrowAngle % 360 + 360) % 360;
     let diff = normalizedTarget - currentMod;
@@ -557,13 +552,135 @@ export default function App() {
   const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
 
-  // Оранжевый сектор центрирован строго внизу симметрично (от -chance/2 до +chance/2 относительно отметки 0% на 6 часах)
+  // Оранжевый сектор центрирован строго внизу симметрично
   const halfPercent = chance > 0 ? chance / 2 : 0;
   const startP = 50 - halfPercent;
   const endP = 50 + halfPercent;
   const wheelConic = chance > 0
     ? `conic-gradient(from 0deg, #181424 0%, #181424 ${startP}%, #ffb703 ${startP}%, #fb8500 50%, #ffb703 ${endP}%, #181424 ${endP}%, #181424 100%)`
     : '#181424';
+
+  /**
+   * КАРТОЧКА ПОДАРКА В ДИЗАЙНЕ TELEGRAM GIFTS (КАК НА ВТОРОМ ФОТО)
+   */
+  const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
+    return (
+      <div
+        key={gift.id}
+        onClick={onSelect}
+        style={{
+          position: 'relative',
+          borderRadius: '24px',
+          background: '#6d756d',
+          backgroundImage: `
+            radial-gradient(#5a625a 1.2px, transparent 1.2px),
+            linear-gradient(145deg, #788078 0%, #5e665e 100%)
+          `,
+          backgroundSize: '16px 16px, 100% 100%',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          border: isSelected ? '2px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
+          boxShadow: isSelected
+            ? '0 0 16px rgba(234, 179, 8, 0.5), 0 8px 20px rgba(0,0,0,0.45)'
+            : '0 6px 16px rgba(0,0,0,0.3)',
+          transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+          minHeight: '148px',
+        }}
+      >
+        {/* Верхняя часть: стеклянный бейдж цены */}
+        <div style={{ padding: '8px 8px 0 8px', display: 'flex', justifyContent: 'flex-start', zIndex: 3 }}>
+          <div
+            style={{
+              background: 'rgba(20, 20, 24, 0.72)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              borderRadius: '16px',
+              padding: '4px 9px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+            }}
+          >
+            <span style={{ fontSize: '11px' }}>💎</span>
+            <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.2px' }}>
+              {gift.price_ton}
+            </span>
+          </div>
+        </div>
+
+        {/* Центр: Крупный подарок */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px 6px',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={gift.image_url}
+            alt={gift.name}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/icons/gift.png';
+            }}
+            style={{
+              width: '74px',
+              height: '74px',
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.45))',
+              transition: 'transform 0.18s ease',
+              display: 'block',
+            }}
+          />
+        </div>
+
+        {/* Нижняя часть: закруглённая тёмная подложка с названием и номером */}
+        <div
+          style={{
+            background: 'rgba(16, 14, 22, 0.94)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            padding: '8px 10px 9px 10px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            textAlign: 'left',
+            zIndex: 3,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: '800',
+              color: '#ffffff',
+              lineHeight: '1.2',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {gift.name}
+          </div>
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: '600',
+              color: '#8b849b',
+              marginTop: '2px',
+              letterSpacing: '0.2px',
+            }}
+          >
+            {gift.serial_number || '#0000'}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1004,7 +1121,7 @@ export default function App() {
                 onClick={() => setSubTab('inventory')}
                 style={{
                   width: '115px',
-                  height: '124px',
+                  height: '130px',
                   borderRadius: '20px',
                   background: '#171126',
                   border: totalBetAmount > 0 ? '2px solid #a855f7' : '2px dashed #3a2b61',
@@ -1015,12 +1132,15 @@ export default function App() {
                   padding: '6px',
                   cursor: 'pointer',
                   position: 'relative',
+                  overflow: 'hidden',
                 }}
               >
                 {selectedSource ? (
                   <>
-                    <img src={selectedSource.image_url} alt="" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px' }}>{selectedSource.name}</span>
+                    <img src={selectedSource.image_url} alt="" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
+                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px', maxWidth: '95%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedSource.name}
+                    </span>
                     <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>
                       💎 {totalBetAmount} {balanceBetTon > 0 && <span style={{ color: '#4ade80', fontSize: '9px' }}>(+{balanceBetTon})</span>}
                     </span>
@@ -1095,7 +1215,7 @@ export default function App() {
                 onClick={() => setSubTab('targets')}
                 style={{
                   width: '115px',
-                  height: '124px',
+                  height: '130px',
                   borderRadius: '20px',
                   background: '#171126',
                   border: hasTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
@@ -1106,6 +1226,7 @@ export default function App() {
                   cursor: 'pointer',
                   padding: '6px',
                   position: 'relative',
+                  overflow: 'hidden',
                 }}
               >
                 {activePreset && targetBalanceTon > 0 ? (
@@ -1120,8 +1241,10 @@ export default function App() {
                   </>
                 ) : selectedTarget ? (
                   <>
-                    <img src={selectedTarget.image_url} alt="" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px' }}>{selectedTarget.name}</span>
+                    <img src={selectedTarget.image_url} alt="" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
+                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px', maxWidth: '95%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedTarget.name}
+                    </span>
                     <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedTarget.price_ton}</span>
                   </>
                 ) : (
@@ -1383,33 +1506,12 @@ export default function App() {
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                    {userInventory.map((gift) => (
-                      <div
-                        key={gift.id}
-                        onClick={() => {
-                          setSelectedSource(gift);
-                          window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                        }}
-                        style={{
-                          background: '#1c1433',
-                          borderRadius: '20px',
-                          padding: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          cursor: 'pointer',
-                          border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
-                          boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
-                          transition: 'all 0.2s',
-                        }}
-                      >
-                        <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                          💎 {gift.price_ton}
-                        </div>
-                        <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                        <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
-                      </div>
-                    ))}
+                    {userInventory.map((gift) =>
+                      renderTelegramNativeCard(gift, selectedSource?.id === gift.id, () => {
+                        setSelectedSource(gift);
+                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      })
+                    )}
                   </div>
                 )}
               </div>
@@ -1427,40 +1529,13 @@ export default function App() {
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                    {bankVault.map((gift) => {
-                      const isSelected = selectedTarget?.id === gift.id && !activePreset;
-                      const isLowerPrice = totalBetAmount > 0 && gift.price_ton <= totalBetAmount;
-                      return (
-                        <div
-                          key={gift.id}
-                          onClick={() => {
-                            setActivePreset(null);
-                            setSelectedTarget(gift);
-                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                          }}
-                          style={{
-                            background: '#1c1433',
-                            borderRadius: '20px',
-                            padding: '8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            cursor: 'pointer',
-                            border: isSelected ? '2px solid #eab308' : '1px solid #2d2150',
-                            boxShadow: isSelected ? '0 0 12px rgba(234, 179, 8, 0.45)' : 'none',
-                            opacity: isLowerPrice ? 0.45 : 1,
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                            💎 {gift.price_ton}
-                          </div>
-                          <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                          <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
-                          <div style={{ fontSize: '8px', color: '#8b7fa8' }}>{gift.serial_number || '#0000'}</div>
-                        </div>
-                      );
-                    })}
+                    {bankVault.map((gift) =>
+                      renderTelegramNativeCard(gift, selectedTarget?.id === gift.id && !activePreset, () => {
+                        setActivePreset(null);
+                        setSelectedTarget(gift);
+                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      })
+                    )}
                   </div>
                 )}
               </div>
@@ -1520,7 +1595,7 @@ export default function App() {
                         value={tempMultipliers[idx]}
                         onChange={(e) => {
                           const val = e.target.value;
-                          const next: [string, string, string] = [...tempMultipliers];
+                          const next: [string, string, string] = [tempMultipliers[0], tempMultipliers[1], tempMultipliers[2]];
                           next[idx] = val;
                           setTempMultipliers(next);
                         }}
@@ -1593,7 +1668,7 @@ export default function App() {
                         value={tempPercents[cfg.idx]}
                         onChange={(e) => {
                           const val = e.target.value;
-                          const next: [string, string, string] = [...tempPercents];
+                          const next: [string, string, string] = [tempPercents[0], tempPercents[1], tempPercents[2]];
                           next[cfg.idx] = val;
                           setTempPercents(next);
                         }}
@@ -1674,35 +1749,15 @@ export default function App() {
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {bankVault.map((gift) => (
-                <div
-                  key={gift.id}
-                  onClick={() => {
-                    setActivePreset(null);
-                    setSelectedTarget(gift);
-                    setActiveTab('upgrade');
-                    setSubTab('targets');
-                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                  }}
-                  style={{
-                    background: '#1c1433',
-                    borderRadius: '20px',
-                    padding: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    border: selectedTarget?.id === gift.id ? '2px solid #eab308' : '1px solid #2d2150',
-                  }}
-                >
-                  <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                    💎 {gift.price_ton}
-                  </div>
-                  <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                  <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
-                  <div style={{ fontSize: '8px', color: '#8b7fa8' }}>{gift.serial_number || '#0000'}</div>
-                </div>
-              ))}
+              {bankVault.map((gift) =>
+                renderTelegramNativeCard(gift, selectedTarget?.id === gift.id, () => {
+                  setActivePreset(null);
+                  setSelectedTarget(gift);
+                  setActiveTab('upgrade');
+                  setSubTab('targets');
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                })
+              )}
             </div>
           )}
         </div>
@@ -1880,34 +1935,15 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                  {userInventory.map((gift) => (
-                    <div
-                      key={gift.id}
-                      onClick={() => {
-                        setSelectedSource(gift);
-                        setIsProfileOpen(false);
-                        setActiveTab('upgrade');
-                        setSubTab('targets');
-                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                      }}
-                      style={{
-                        background: '#1c1433',
-                        borderRadius: '18px',
-                        padding: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
-                      }}
-                    >
-                      <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                        💎 {gift.price_ton}
-                      </div>
-                      <img src={gift.image_url} alt="" style={{ width: '42px', height: '42px', margin: '4px 0', objectFit: 'contain' }} />
-                      <div style={{ fontSize: '10px', fontWeight: '700', textAlign: 'center' }}>{gift.name}</div>
-                    </div>
-                  ))}
+                  {userInventory.map((gift) =>
+                    renderTelegramNativeCard(gift, selectedSource?.id === gift.id, () => {
+                      setSelectedSource(gift);
+                      setIsProfileOpen(false);
+                      setActiveTab('upgrade');
+                      setSubTab('targets');
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                    })
+                  )}
                 </div>
               )}
             </div>
