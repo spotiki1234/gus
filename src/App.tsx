@@ -55,10 +55,15 @@ interface BankGift {
   backdrop_name?: string;
 }
 
+interface ShopBuyResponse {
+  error?: string;
+  newBalance?: number;
+  item?: BankGift;
+}
+
 /**
  * АВТОМАТИЧЕСКИЙ НОРМАЛИЗАТОР ССЫЛОК:
  * Исправляет t.me/i/nft, битые ссылки и подставляет прямой CDN Fragment
- * (Не экспортируется наружу ради совместимости с Fast Refresh)
  */
 function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
   const cleanSlug = (slug || '').trim();
@@ -237,7 +242,6 @@ export default function App() {
           if (t) setBalanceTon(parseFloat(t));
         });
 
-      // Асинхронный вызов без синхронного setState в теле effect
       fetch(`/api/inventory/${tgUser.id}?t=${Date.now()}`)
         .then((res) => res.json())
         .then((data: { items?: BankGift[] }) => {
@@ -248,10 +252,8 @@ export default function App() {
 
     loadBankGifts();
 
-    // Автоматический опрос банка подарков каждые 4 секунды
     const bankInterval = setInterval(loadBankGifts, 4000);
 
-    // Онлайн пинг
     const pingOnline = () => {
       fetch('/api/online', {
         method: 'POST',
@@ -321,7 +323,14 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: ShopBuyResponse = {};
+      try {
+        data = JSON.parse(text) as ShopBuyResponse;
+      } catch {
+        throw new Error('Сервер бэкенда не обновлен или роут недоступен (404)');
+      }
+
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Ошибка при покупке');
       }
@@ -332,7 +341,7 @@ export default function App() {
       }
 
       if (data.item) {
-        setUserInventory((prev) => [data.item, ...prev.filter((i) => i.id !== data.item.id)]);
+        setUserInventory((prev) => [data.item as BankGift, ...prev.filter((i) => i.id !== data.item?.id)]);
       }
       setBankVault((prev) => prev.filter((g) => g.id !== gift.id));
 
@@ -524,7 +533,6 @@ export default function App() {
 
       const spinDuration = isFastSpin ? 800 : 3200;
 
-      // Списываем поставленный баланс
       let currentBal = balanceTon;
       if (balanceBetTon > 0) {
         currentBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
