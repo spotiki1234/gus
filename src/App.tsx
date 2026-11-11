@@ -136,7 +136,7 @@ export default function App() {
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
-  // Угол поворота стрелки вокруг колеса (колесо остаётся неподвижным!)
+  // Угол поворота стрелки вокруг колеса (колесо неподвижно)
   const [arrowAngle, setArrowAngle] = useState<number>(0);
 
   // Шторки
@@ -257,7 +257,7 @@ export default function App() {
 
   const targetBalanceTon = calculateTargetBalanceTon();
 
-  // Итоговая стоимость цели (либо выигрышный баланс TON по кнопкам коэффициентов, либо выбранный подарок)
+  // Итоговая стоимость цели
   const targetPriceTon = activePreset && targetBalanceTon > 0
     ? targetBalanceTon
     : (selectedTarget ? selectedTarget.price_ton : 0);
@@ -331,7 +331,7 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
-  // Клик по кнопкам коэффициента/процентов: выбирает целью баланс TON
+  // Клик по кнопкам коэффициента/процентов
   const handlePresetClick = (presetId: string) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
@@ -348,7 +348,7 @@ export default function App() {
     setSelectedTarget(null);
   };
 
-  // Апгрейд: КОЛЕСО НЕПОДВИЖНО, КРУТИТСЯ СТРЕЛКА ВОКРУГ КОЛЕСА
+  // Апгрейд: КОЛЕСО СИММЕТРИЧНО ВНИЗУ, КРУТИТСЯ СТРЕЛКА ВОКРУГ КОЛЕСА
   const handleUpgrade = () => {
     if (isSpinning || chance <= 0 || totalBetAmount <= 0 || targetPriceTon <= totalBetAmount) return;
 
@@ -363,24 +363,22 @@ export default function App() {
     const roll = Math.random() * 100;
     const isWin = roll < chance;
 
-    // Сектор шанса начинается снизу у отметки 0% (180°) и идёт по часовой стрелке направо на sectorSpan градусов
+    // Сектор шанса центрирован строго внизу: от -sectorSpan/2 до +sectorSpan/2 (то есть [360 - halfSpan; 360] и [0; halfSpan])
     const sectorSpan = (chance / 100) * 360;
-
-    // Стрелка начинает внизу (0° локального поворота).
-    // При вращении стрелки по часовой стрелке:
-    // Зона выигрыша: от (360° - sectorSpan) до 360° (оранжевый сектор справа).
-    // Зона проигрыша: от 0° до (360° - sectorSpan) (тёмный сектор слева).
-    const winZoneStart = 360 - sectorSpan;
+    const halfSpan = sectorSpan / 2;
     const padding = Math.min(3, sectorSpan * 0.05);
 
-    // Вычисляем целевой угол сразу без лишних присваиваний (чтобы не ругался eslint)
+    // Вычисляем целевой угол стрелки:
+    // Зона победы: в пределах [-halfSpan + padding; halfSpan - padding] относительно низа (0°).
+    // Зона проигрыша: в верхней темной области [halfSpan + padding; 360 - halfSpan - padding].
     const targetAngle = isWin
-      ? winZoneStart + padding + Math.random() * (sectorSpan - padding * 2)
-      : padding + Math.random() * ((360 - sectorSpan) - padding * 2);
+      ? (Math.random() - 0.5) * (sectorSpan - padding * 2)
+      : halfSpan + padding + Math.random() * ((360 - sectorSpan) - padding * 2);
 
-    // Вычисляем плавный доворот с полными оборотами
-    const currentMod = arrowAngle % 360;
-    let diff = targetAngle - currentMod;
+    // Нормализуем текущий угол и доворачиваем по часовой стрелке
+    const normalizedTarget = (targetAngle % 360 + 360) % 360;
+    const currentMod = (arrowAngle % 360 + 360) % 360;
+    let diff = normalizedTarget - currentMod;
     if (diff < 0) diff += 360;
 
     const extraFullSpins = isFastSpin ? 360 * 3 : 360 * 6;
@@ -559,9 +557,12 @@ export default function App() {
   const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
 
-  // Оранжевый сектор начинается ровно снизу у отметки 0% (180°) и идёт по правой стороне вверх
+  // Оранжевый сектор центрирован строго внизу симметрично (от -chance/2 до +chance/2 относительно отметки 0% на 6 часах)
+  const halfPercent = chance > 0 ? chance / 2 : 0;
+  const startP = 50 - halfPercent;
+  const endP = 50 + halfPercent;
   const wheelConic = chance > 0
-    ? `conic-gradient(from 180deg, #181424 0%, #181424 ${100 - chance}%, #ffb703 ${100 - chance}%, #fb8500 100%)`
+    ? `conic-gradient(from 0deg, #181424 0%, #181424 ${startP}%, #ffb703 ${startP}%, #fb8500 50%, #ffb703 ${endP}%, #181424 ${endP}%, #181424 100%)`
     : '#181424';
 
   return (
@@ -809,7 +810,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* КОЛЕСО РУЛЕТКИ: КОЛЕСО НЕПОДВИЖНО, СТРЕЛКА ВРАЩАЕТСЯ ВОКРУГ НЕГО */}
+            {/* КОЛЕСО РУЛЕТКИ: КОЛЕСО НЕПОДВИЖНО, СЕКТОР СТРОГО СНИЗУ ПО ЦЕНТРУ, СТРЕЛКА ВРАЩАЕТСЯ ВОКРУГ НЕГО */}
             <div
               style={{
                 position: 'relative',
@@ -865,7 +866,7 @@ export default function App() {
                 }}
               />
 
-              {/* НЕПОДВИЖНЫЙ ДИСК КОЛЕСА СО СВЕТОВЫМ СЕКТОРОМ ШАНСА */}
+              {/* НЕПОДВИЖНЫЙ ДИСК КОЛЕСА СО СВЕТОВЫМ СЕКТОРОМ ШАНСА СТРОГО ПО ЦЕНТРУ СНИЗУ */}
               <div
                 style={{
                   width: '184px',
@@ -932,7 +933,7 @@ export default function App() {
                   pointerEvents: 'none',
                 }}
               >
-                {/* Стрелка на 6 часах (внизу), направленная остриём к центру колеса */}
+                {/* Стрелка снизу (на 6 часах при 0°), направленная остриём к центру колеса */}
                 <div
                   style={{
                     position: 'absolute',
@@ -987,7 +988,7 @@ export default function App() {
                   transform: 'translateX(-50%)',
                   fontSize: '10px',
                   fontWeight: '800',
-                  color: '#8b839e',
+                  color: '#8b7fa8',
                   userSelect: 'none',
                   pointerEvents: 'none',
                 }}
