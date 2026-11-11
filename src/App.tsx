@@ -563,7 +563,7 @@ export default function App() {
   /**
    * КАРТОЧКА ПОДАРКА В ТОЧНОМ ДИЗАЙНЕ TELEGRAM GIFTS (КАК НА ФОТО):
    * - Изображение подарка занимает всю верхнюю область карточки (object-fit: cover) вместе с его фоном
-   * - Стеклянная плашка цены 💎 8.00 поверх картинки слева сверху
+   * - Стеклянная плашка цены с иконкой ton.png поверх картинки слева сверху
    * - Нижняя тёмная плашка с жирным белым названием и серым номером
    * - Золотая рамка при выборе карточки
    */
@@ -601,7 +601,7 @@ export default function App() {
             justifyContent: 'center',
           }}
         >
-          {/* Стеклянный бейдж цены поверх изображения (слева сверху) */}
+          {/* Стеклянный бейдж цены с иконкой ton.png поверх изображения (слева сверху) */}
           <div
             style={{
               position: 'absolute',
@@ -619,7 +619,17 @@ export default function App() {
               zIndex: 3,
             }}
           >
-            <span style={{ fontSize: '11px' }}>💎</span>
+            <img
+              src={ICONS.ton}
+              alt="TON"
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '3px',
+                display: 'block',
+                objectFit: 'contain',
+              }}
+            />
             <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.2px' }}>
               {gift.price_ton}
             </span>
@@ -681,10 +691,10 @@ export default function App() {
   };
 
   /**
-   * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА (ТОЧНО КАК НА ФОТО Heart Locket #1861):
+   * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА (КАК НА ПЕРВОМ СКРИНШОТЕ Heart Locket):
    * - Фон подарка растянут на весь слот 100% (object-fit: cover)
-   * - Сверху по центру овальная плашка с ценой: 💎 1,566.4
-   * - Снизу внутри карточки парящая капсула с названием подарка и серым серийным номером (#1861)
+   * - Сверху по центру овальная плашка с ценой и иконкой ton.png (/icons/ton.png)
+   * - Снизу внутри карточки парящая капсула с названием подарка и серым серийным номером
    */
   const renderArenaGiftCard = (gift: BankGift, extraSubText?: string) => {
     return (
@@ -707,7 +717,7 @@ export default function App() {
           }}
         />
 
-        {/* Верхняя овальная плашка с ценой (по центру) */}
+        {/* Верхняя овальная плашка с иконкой ton.png и ценой (по центру) */}
         <div
           style={{
             position: 'absolute',
@@ -727,7 +737,17 @@ export default function App() {
             whiteSpace: 'nowrap',
           }}
         >
-          <span style={{ fontSize: '11px' }}>💎</span>
+          <img
+            src={ICONS.ton}
+            alt="TON"
+            style={{
+              width: '13px',
+              height: '13px',
+              borderRadius: '3px',
+              display: 'block',
+              objectFit: 'contain',
+            }}
+          />
           <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffb703', letterSpacing: '-0.2px' }}>
             {gift.price_ton}
           </span>
@@ -738,7 +758,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Нижняя парящая тёмная капсула (как на фото 1: Heart Locket / #1861) */}
+        {/* Нижняя парящая тёмная капсула (как на фото 1: Desk Calendar / Heart Locket) */}
         <div
           style={{
             position: 'absolute',
@@ -1273,8 +1293,9 @@ export default function App() {
                       <img src={ICONS.ton} alt="TON" style={{ width: '22px', height: '22px' }} />
                     </div>
                     <span style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Баланс</span>
-                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
-                      💎 {balanceBetTon} TON
+                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
+                      {balanceBetTon} TON
                     </span>
                   </>
                 ) : (
@@ -1304,7 +1325,7 @@ export default function App() {
                 </svg>
               </div>
 
-              {/* ПРАВАЯ КАРТОЧКА: ЦЕЛЬ (БАЛАНС TON ИЛИ ПОДАРОК КАК НА ФОТО Heart Locket) */}
+              {/* ПРАВАЯ КАРТОЧКА: ЦЕЛЬ (БАЛАНС TON ИЛИ ПОДАРОК С ИКОНКОЙ ton.png) */}
               <div
                 onClick={() => setSubTab('targets')}
                 style={{
@@ -1329,8 +1350,9 @@ export default function App() {
                       <img src={ICONS.ton} alt="TON" style={{ width: '24px', height: '24px' }} />
                     </div>
                     <span style={{ fontSize: '10px', color: '#eab308', fontWeight: '800', textTransform: 'uppercase' }}>Баланс TON</span>
-                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
-                      💎 {targetBalanceTon} TON
+                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
+                      {targetBalanceTon} TON
                     </span>
                   </>
                 ) : selectedTarget ? (
