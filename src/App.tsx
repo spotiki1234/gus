@@ -135,7 +135,9 @@ export default function App() {
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [wheelRotation, setWheelRotation] = useState<number>(0);
+
+  // Угол поворота стрелки вокруг колеса (колесо остаётся неподвижным!)
+  const [arrowAngle, setArrowAngle] = useState<number>(0);
 
   // Шторки
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -346,7 +348,7 @@ export default function App() {
     setSelectedTarget(null);
   };
 
-  // Апгрейд (крутится сектор колеса, стрелка снизу на 6 часах указывает на результат)
+  // Апгрейд: КОЛЕСО НЕПОДВИЖНО, КРУТИТСЯ СТРЕЛКА ВОКРУГ КОЛЕСА
   const handleUpgrade = () => {
     if (isSpinning || chance <= 0 || totalBetAmount <= 0 || targetPriceTon <= totalBetAmount) return;
 
@@ -361,16 +363,34 @@ export default function App() {
     const roll = Math.random() * 100;
     const isWin = roll < chance;
 
-    // Вращение колеса так, чтобы нижняя стрелка (180°) попала либо в оранжевую выигрышную зону, либо в темную проигрышную
+    // Сектор шанса начинается снизу у отметки 0% (180°) и идёт по часовой стрелке направо на sectorSpan градусов
     const sectorSpan = (chance / 100) * 360;
-    // Оранжевый сектор центрирован внизу (от -sectorSpan/2 до +sectorSpan/2 относительно 180°)
-    const offsetInSector = isWin
-      ? (Math.random() - 0.5) * (sectorSpan * 0.9)
-      : 180 + (Math.random() - 0.5) * ((360 - sectorSpan) * 0.9);
+
+    // Стрелка начинает внизу (0° локального поворота).
+    // При вращении стрелки по часовой стрелке:
+    // Зона выигрыша: от (360° - sectorSpan) до 360° (оранжевый сектор справа).
+    // Зона проигрыша: от 0° до (360° - sectorSpan) (тёмный сектор слева).
+    const winZoneStart = 360 - sectorSpan;
+    const padding = Math.min(3, sectorSpan * 0.05);
+
+    let targetAngle = 0;
+    if (isWin) {
+      // Случайная точка строго внутри оранжевого сектора
+      targetAngle = winZoneStart + padding + Math.random() * (sectorSpan - padding * 2);
+    } else {
+      // Случайная точка строго внутри тёмной зоны
+      const looseSpan = 360 - sectorSpan;
+      targetAngle = padding + Math.random() * (looseSpan - padding * 2);
+    }
+
+    // Вычисляем плавный доворот с полными оборотами
+    const currentMod = arrowAngle % 360;
+    let diff = targetAngle - currentMod;
+    if (diff < 0) diff += 360;
 
     const extraFullSpins = isFastSpin ? 360 * 3 : 360 * 6;
-    const nextRotation = wheelRotation + extraFullSpins + offsetInSector;
-    setWheelRotation(nextRotation);
+    const nextArrowAngle = arrowAngle + extraFullSpins + diff;
+    setArrowAngle(nextArrowAngle);
 
     const spinDuration = isFastSpin ? 800 : 3200;
 
@@ -544,12 +564,10 @@ export default function App() {
   const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
 
-  // Расчёт конического градиента для оранжевого сектора шанса
-  const halfPercent = chance > 0 ? chance / 2 : 0;
-  const startP = 50 - halfPercent;
-  const endP = 50 + halfPercent;
+  // Оранжевый сектор начинается ровно снизу у отметки 0% (180°) и идёт по правой стороне вверх
+  // Ровно как на прикреплённом скриншоте!
   const wheelConic = chance > 0
-    ? `conic-gradient(from 0deg, #181424 0%, #181424 ${startP}%, #ffb703 ${startP}%, #fb8500 50%, #ffb703 ${endP}%, #181424 ${endP}%, #181424 100%)`
+    ? `conic-gradient(from 180deg, #181424 0%, #181424 ${100 - chance}%, #ffb703 ${100 - chance}%, #fb8500 100%)`
     : '#181424';
 
   return (
@@ -797,7 +815,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* НОВОЕ КОЛЕСО РУЛЕТКИ (В ТОЧНОСТИ КАК НА СКРИНШОТЕ) */}
+            {/* КОЛЕСО РУЛЕТКИ: КОЛЕСО НЕПОДВИЖНО, СТРЕЛКА ВРАЩАЕТСЯ ВОКРУГ НЕГО */}
             <div
               style={{
                 position: 'relative',
@@ -839,7 +857,7 @@ export default function App() {
                 50%
               </div>
 
-              {/* Внешнее тонкое кольцо с оранжевой обводкой снизу */}
+              {/* Внешнее тонкое кольцо с оранжевой обводкой снизу под сектором */}
               <div
                 style={{
                   position: 'absolute',
@@ -850,11 +868,10 @@ export default function App() {
                   borderBottom: chance > 0 ? '2px solid #ff7b00' : '1.5px solid #231c38',
                   boxShadow: chance > 0 ? '0 0 18px rgba(255, 123, 0, 0.35)' : 'none',
                   pointerEvents: 'none',
-                  transition: 'border-bottom 0.3s, box-shadow 0.3s',
                 }}
               />
 
-              {/* Вращающийся диск со световым сектором */}
+              {/* НЕПОДВИЖНЫЙ ДИСК КОЛЕСА СО СВЕТОВЫМ СЕКТОРОМ ШАНСА */}
               <div
                 style={{
                   width: '184px',
@@ -865,13 +882,9 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  transform: `rotate(${wheelRotation}deg)`,
-                  transition: isSpinning
-                    ? `transform ${isFastSpin ? '0.8s cubic-bezier(0.1, 0.9, 0.2, 1)' : '3.2s cubic-bezier(0.12, 0.8, 0.2, 1)'}`
-                    : 'none',
                 }}
               >
-                {/* Внутренняя темная сердцевина */}
+                {/* Неподвижная центральная сердцевина с процентами и текстом */}
                 <div
                   style={{
                     width: '128px',
@@ -879,11 +892,11 @@ export default function App() {
                     borderRadius: '50%',
                     background: '#0d091a',
                     boxShadow: '0 0 18px rgba(0,0,0,0.9), inset 0 0 12px rgba(0,0,0,0.8)',
-                    transform: `rotate(${-wheelRotation}deg)`,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    userSelect: 'none',
                   }}
                 >
                   <div
@@ -910,62 +923,82 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Неподвижная стрелка-указатель снизу на 6 часах */}
+              {/* ВРАЩАЮЩИЙСЯ КОНТЕЙНЕР СТРЕЛКИ ВОКРУГ КОЛЕСА */}
               <div
                 style={{
                   position: 'absolute',
-                  bottom: '-2px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  zIndex: 5,
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  transform: `rotate(${arrowAngle}deg)`,
+                  transition: isSpinning
+                    ? `transform ${isFastSpin ? '0.8s cubic-bezier(0.1, 0.9, 0.2, 1)' : '3.2s cubic-bezier(0.12, 0.8, 0.2, 1)'}`
+                    : 'none',
                   pointerEvents: 'none',
                 }}
               >
-                {/* Острие стрелки вверх в сектор */}
+                {/* Стрелка на 6 часах (внизу), направленная остриём к центру колеса */}
                 <div
                   style={{
-                    width: 0,
-                    height: 0,
-                    borderLeft: '5px solid transparent',
-                    borderRight: '5px solid transparent',
-                    borderBottom: '9px solid #ffb703',
-                    filter: 'drop-shadow(0 0 6px rgba(255, 183, 3, 0.8))',
-                  }}
-                />
-                {/* Линия стрелки */}
-                <div
-                  style={{
-                    width: '2px',
-                    height: '14px',
-                    background: '#ffb703',
-                    boxShadow: '0 0 6px #ffb703',
-                  }}
-                />
-                {/* Точка на ободе */}
-                <div
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    background: '#ffb703',
-                    boxShadow: '0 0 8px #ffb703',
-                    marginTop: '-2px',
-                  }}
-                />
-                {/* Подпись 0% под стрелкой */}
-                <div
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: '800',
-                    color: '#8b839e',
-                    marginTop: '2px',
+                    position: 'absolute',
+                    bottom: '-3px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
                   }}
                 >
-                  0%
+                  {/* Острие стрелки вверх в колесо */}
+                  <div
+                    style={{
+                      width: 0,
+                      height: 0,
+                      borderLeft: '5px solid transparent',
+                      borderRight: '5px solid transparent',
+                      borderBottom: '9px solid #ffb703',
+                      filter: 'drop-shadow(0 0 6px rgba(255, 183, 3, 0.9))',
+                    }}
+                  />
+                  {/* Стержень стрелки */}
+                  <div
+                    style={{
+                      width: '2px',
+                      height: '13px',
+                      background: '#ffb703',
+                      boxShadow: '0 0 6px #ffb703',
+                    }}
+                  />
+                  {/* Светящаяся точка на ободке */}
+                  <div
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: '#ffb703',
+                      boxShadow: '0 0 8px #ffb703',
+                      marginTop: '-2px',
+                    }}
+                  />
                 </div>
+              </div>
+
+              {/* Неподвижная метка 0% снизу на ободке */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '-18px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: '#8b839e',
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                }}
+              >
+                0%
               </div>
             </div>
 
