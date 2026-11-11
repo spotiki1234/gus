@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTonConnectUI, useTonWallet, useTonAddress, TonConnectButton } from '@tonconnect/ui-react';
 import confetti from 'canvas-confetti';
 
@@ -51,6 +51,8 @@ interface BankGift {
   price_stars: number;
   price_ton: number;
   serial_number?: string;
+  model_name?: string;
+  backdrop_name?: string;
 }
 
 export default function App() {
@@ -107,6 +109,12 @@ export default function App() {
     }
     return [35, 55, 75];
   });
+
+  // Фильтры и сортировка в магазине (как на втором фото)
+  const [shopSortOrder, setShopSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [shopFilterType, setShopFilterType] = useState<string>('all');
+  const [shopFilterModel, setShopFilterModel] = useState<string>('all');
+  const [shopFilterBackdrop, setShopFilterBackdrop] = useState<string>('all');
 
   // Временные значения инпутов для модалки настроек
   const [tempMultipliers, setTempMultipliers] = useState<[string, string, string]>(['2', '4', '8']);
@@ -237,6 +245,67 @@ export default function App() {
       console.error('Ошибка сохранения баланса в БД:', e);
     }
   };
+
+  // Покупка предмета прямо в магазине
+  const handleBuyGiftInShop = async (gift: BankGift) => {
+    if (balanceTon < gift.price_ton) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+      setIsDepositOpen(true);
+      setDepositStep('methods');
+      return;
+    }
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy');
+    const newBal = Number((balanceTon - gift.price_ton).toFixed(2));
+    saveBalanceToDb(newBal);
+
+    setUserInventory((prev) => [...prev, { ...gift, id: Date.now() }]);
+    setBankVault((prev) => prev.filter((g) => g.id !== gift.id));
+
+    confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+  };
+
+  // Опции для фильтров в магазине
+  const uniqueGiftTypes = useMemo(() => {
+    const set = new Set<string>();
+    bankVault.forEach((g) => {
+      if (g.name) set.add(g.name);
+    });
+    return Array.from(set);
+  }, [bankVault]);
+
+  const uniqueModels = useMemo(() => {
+    const set = new Set<string>();
+    bankVault.forEach((g) => {
+      if (g.model_name) set.add(g.model_name);
+    });
+    return Array.from(set);
+  }, [bankVault]);
+
+  const uniqueBackdrops = useMemo(() => {
+    const set = new Set<string>();
+    bankVault.forEach((g) => {
+      if (g.backdrop_name) set.add(g.backdrop_name);
+    });
+    return Array.from(set);
+  }, [bankVault]);
+
+  // Отфильтрованные и отсортированные подарки в магазине
+  const filteredShopGifts = useMemo(() => {
+    return bankVault
+      .filter((g) => {
+        if (shopFilterType !== 'all' && g.name !== shopFilterType) return false;
+        if (shopFilterModel !== 'all' && g.model_name !== shopFilterModel) return false;
+        if (shopFilterBackdrop !== 'all' && g.backdrop_name !== shopFilterBackdrop) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        return shopSortOrder === 'asc'
+          ? a.price_ton - b.price_ton
+          : b.price_ton - a.price_ton;
+      });
+  }, [bankVault, shopFilterType, shopFilterModel, shopFilterBackdrop, shopSortOrder]);
 
   // Сумма ставки с баланса по полоске
   const balanceBetTon = Number(((balanceTon * balanceSliderPercent) / 100).toFixed(2));
@@ -561,11 +630,8 @@ export default function App() {
     : '#181424';
 
   /**
-   * КАРТОЧКА ПОДАРКА В ТОЧНОМ ДИЗАЙНЕ TELEGRAM GIFTS (КАК НА ФОТО):
-   * - Изображение подарка занимает всю верхнюю область карточки (object-fit: cover) вместе с его фоном
-   * - Стеклянная плашка цены с иконкой ton.png поверх картинки слева сверху
-   * - Нижняя тёмная плашка с жирным белым названием и серым номером
-   * - Золотая рамка при выборе карточки
+   * КАРТОЧКА ПОДАРКА ДЛЯ ИНВЕНТАРЯ И ЦЕЛИ (ТЕЛЕГРАМ СТИЛЬ):
+   * Стеклянная плашка с ценой и иконкой ton.png поверх изображения
    */
   const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
     return (
@@ -588,7 +654,6 @@ export default function App() {
           transform: isSelected ? 'scale(1.02)' : 'scale(1)',
         }}
       >
-        {/* Верхняя часть: изображение подарка на всю область карточки */}
         <div
           style={{
             position: 'relative',
@@ -601,7 +666,7 @@ export default function App() {
             justifyContent: 'center',
           }}
         >
-          {/* Стеклянный бейдж цены с иконкой ton.png поверх изображения (слева сверху) */}
+          {/* Стеклянный бейдж цены с иконкой ton.png слева сверху */}
           <div
             style={{
               position: 'absolute',
@@ -635,7 +700,6 @@ export default function App() {
             </span>
           </div>
 
-          {/* Изображение подарка со своим фоном растягивается на всю карточку */}
           <img
             src={gift.image_url}
             alt={gift.name}
@@ -651,7 +715,6 @@ export default function App() {
           />
         </div>
 
-        {/* Нижняя часть: закруглённая тёмная плашка с названием и номером */}
         <div
           style={{
             background: '#120d22',
@@ -691,15 +754,131 @@ export default function App() {
   };
 
   /**
+   * КАРТОЧКА МАГАЗИНА (ТОЧНО КАК НА ВТОРОМ ФОТО):
+   * - Тёмный контейнер с крупным скруглением
+   * - Внутри сверху квадратная картинка подарка с собственным цветным фоном
+   * - Под ней: жирное белое название (Heart Locket) и серый серийный номер (#1515)
+   * - Снизу ярко-синяя крупная овальная кнопка с ценой и символом TON (1742.45 💎/TON)
+   */
+  const renderMarketplaceCard = (gift: BankGift) => {
+    return (
+      <div
+        key={gift.id}
+        style={{
+          background: '#14121a',
+          borderRadius: '24px',
+          padding: '10px 10px 12px 10px',
+          border: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
+          position: 'relative',
+        }}
+      >
+        {/* Изображение подарка с собственным цветным фоном и мягкими скруглёнными углами */}
+        <div
+          style={{
+            width: '100%',
+            aspectRatio: '1 / 1',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            background: '#1f1a2e',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '10px',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={gift.image_url}
+            alt={gift.name}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/icons/gift.png';
+            }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        </div>
+
+        {/* Название подарка и номер #1515 */}
+        <div style={{ textAlign: 'left', padding: '0 4px', marginBottom: '10px' }}>
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: '800',
+              color: '#ffffff',
+              lineHeight: '1.2',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {gift.name}
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: '600',
+              color: '#7e7892',
+              marginTop: '3px',
+              letterSpacing: '0.2px',
+            }}
+          >
+            {gift.serial_number || '#0000'}
+          </div>
+        </div>
+
+        {/* Синяя кнопка покупки с ценой и иконкой TON */}
+        <button
+          onClick={() => handleBuyGiftInShop(gift)}
+          style={{
+            width: '100%',
+            borderRadius: '18px',
+            background: '#007aff',
+            border: 'none',
+            padding: '9px 6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '5px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0, 122, 255, 0.4)',
+            transition: 'transform 0.15s ease, background 0.15s ease',
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.3px' }}>
+            {gift.price_ton}
+          </span>
+          <img
+            src={ICONS.ton}
+            alt="TON"
+            style={{
+              width: '13px',
+              height: '13px',
+              borderRadius: '3px',
+              display: 'block',
+              objectFit: 'contain',
+            }}
+          />
+        </button>
+      </div>
+    );
+  };
+
+  /**
    * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА (КАК НА ПЕРВОМ СКРИНШОТЕ Heart Locket):
    * - Фон подарка растянут на весь слот 100% (object-fit: cover)
-   * - Сверху по центру овальная плашка с ценой и иконкой ton.png (/icons/ton.png)
+   * - Сверху по центру овальная плашка с ценой и иконкой ton.png
    * - Снизу внутри карточки парящая капсула с названием подарка и серым серийным номером
    */
   const renderArenaGiftCard = (gift: BankGift, extraSubText?: string) => {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: '22px' }}>
-        {/* Картинка подарка вместе со своим фоном растягивается на всю карточку целиком */}
         <img
           src={gift.image_url}
           alt={gift.name}
@@ -717,7 +896,6 @@ export default function App() {
           }}
         />
 
-        {/* Верхняя овальная плашка с иконкой ton.png и ценой (по центру) */}
         <div
           style={{
             position: 'absolute',
@@ -758,7 +936,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Нижняя парящая тёмная капсула (как на фото 1: Desk Calendar / Heart Locket) */}
         <div
           style={{
             position: 'absolute',
@@ -862,6 +1039,10 @@ export default function App() {
         }
         input[type=number] {
           -moz-appearance: textfield;
+        }
+        select option {
+          background: #181424;
+          color: #fff;
         }
       `}</style>
 
@@ -1049,7 +1230,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* КОЛЕСО РУЛЕТКИ: КОЛЕСО НЕПОДВИЖНО, СЕКТОР СТРОГО СНИЗУ ПО ЦЕНТРУ, СТРЕЛКА ВРАЩАЕТСЯ ВОКРУГ НЕГО */}
+            {/* КОЛЕСО РУЛЕТКИ */}
             <div
               style={{
                 position: 'relative',
@@ -1061,7 +1242,6 @@ export default function App() {
                 justifyContent: 'center',
               }}
             >
-              {/* Метки 50% слева и справа снаружи */}
               <div
                 style={{
                   position: 'absolute',
@@ -1091,7 +1271,6 @@ export default function App() {
                 50%
               </div>
 
-              {/* Внешнее тонкое кольцо с оранжевой обводкой снизу под сектором */}
               <div
                 style={{
                   position: 'absolute',
@@ -1105,7 +1284,6 @@ export default function App() {
                 }}
               />
 
-              {/* НЕПОДВИЖНЫЙ ДИСК КОЛЕСА СО СВЕТОВЫМ СЕКТОРОМ ШАНСА СТРОГО ПО ЦЕНТРУ СНИЗУ */}
               <div
                 style={{
                   width: '184px',
@@ -1118,7 +1296,6 @@ export default function App() {
                   justifyContent: 'center',
                 }}
               >
-                {/* Неподвижная центральная сердцевина с процентами и текстом */}
                 <div
                   style={{
                     width: '128px',
@@ -1157,7 +1334,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ВРАЩАЮЩИЙСЯ КОНТЕЙНЕР СТРЕЛКИ ВОКРУГ КОЛЕСА */}
+              {/* ВРАЩАЮЩАЯСЯ СТРЕЛКА */}
               <div
                 style={{
                   position: 'absolute',
@@ -1172,7 +1349,6 @@ export default function App() {
                   pointerEvents: 'none',
                 }}
               >
-                {/* Стрелка снизу (на 6 часах при 0°), направленная остриём к центру колеса */}
                 <div
                   style={{
                     position: 'absolute',
@@ -1184,7 +1360,6 @@ export default function App() {
                     alignItems: 'center',
                   }}
                 >
-                  {/* Острие стрелки вверх в колесо */}
                   <div
                     style={{
                       width: 0,
@@ -1195,7 +1370,6 @@ export default function App() {
                       filter: 'drop-shadow(0 0 6px rgba(255, 183, 3, 0.9))',
                     }}
                   />
-                  {/* Стержень стрелки */}
                   <div
                     style={{
                       width: '2px',
@@ -1204,7 +1378,6 @@ export default function App() {
                       boxShadow: '0 0 6px #ffb703',
                     }}
                   />
-                  {/* Светящаяся точка на ободке */}
                   <div
                     style={{
                       width: '6px',
@@ -1218,7 +1391,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Неподвижная метка 0% снизу на ободке */}
               <div
                 style={{
                   position: 'absolute',
@@ -1238,7 +1410,6 @@ export default function App() {
 
             {/* Карточки апгрейда: Исходная ставка -> Желаемая цель */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
-              {/* ЛЕВАЯ КАРТОЧКА: ПРЕДМЕТ + БАЛАНС (ИЛИ ТОЛЬКО БАЛАНС) */}
               <div
                 onClick={() => setSubTab('inventory')}
                 style={{
@@ -1260,7 +1431,6 @@ export default function App() {
                 {selectedSource ? (
                   <>
                     {renderArenaGiftCard(selectedSource, balanceBetTon > 0 ? `+${balanceBetTon}` : undefined)}
-                    {/* Кнопка сброса предмета */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1303,7 +1473,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Стрелка направления */}
               <div
                 style={{
                   width: '32px',
@@ -1325,7 +1494,6 @@ export default function App() {
                 </svg>
               </div>
 
-              {/* ПРАВАЯ КАРТОЧКА: ЦЕЛЬ (БАЛАНС TON ИЛИ ПОДАРОК С ИКОНКОЙ ton.png) */}
               <div
                 onClick={() => setSubTab('targets')}
                 style={{
@@ -1376,7 +1544,6 @@ export default function App() {
                 gap: '12px',
               }}
             >
-              {/* Левая часть: Подпись "Ставка" + иконка TON и сумма */}
               <div style={{ textAlign: 'left', minWidth: '70px', flexShrink: 0 }}>
                 <div style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '700' }}>Ставка</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
@@ -1387,7 +1554,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Центр: Ползунок слайдер */}
               <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type="range"
@@ -1403,7 +1569,6 @@ export default function App() {
                 />
               </div>
 
-              {/* Правая часть: Бейдж с процентом (0%, 25%, 50%, 100%) */}
               <div
                 onClick={() => {
                   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -1841,33 +2006,262 @@ export default function App() {
         </div>
       )}
 
-      {/* МАГАЗИН БАНКА */}
+      {/* МАГАЗИН БАНКА (ПОЛНОСТЬЮ ОБНОВЛЁННЫЙ В СТИЛЕ ВТОРОГО ФОТО) */}
       {activeTab === 'shop' && (
-        <div style={{ padding: '16px 18px 10px 18px' }}>
-          <div style={{ fontSize: '17px', fontWeight: '800', marginBottom: '14px' }}>
-            Магазин банка ({bankVault.length})
+        <div style={{ padding: '16px 14px 10px 14px' }}>
+          
+          {/* ВЕРХНЯЯ ПАНЕЛЬ ФИЛЬТРОВ И СОРТИРОВКИ (КАК НА ВТОРОМ ФОТО: ⇅ | Тип ⌄ | Скин ⌄ | Фон ⌄) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '16px',
+              overflowX: 'auto',
+              paddingBottom: '4px',
+            }}
+          >
+            {/* Кнопка сортировки по цене (стрелки вверх/вниз) */}
+            <button
+              onClick={() => {
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                setShopSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+              }}
+              title={shopSortOrder === 'asc' ? 'Сначала дешевые' : 'Сначала дорогие'}
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '16px',
+                background: '#181424',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: shopSortOrder === 'desc' ? '#007aff' : '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="7" y1="20" x2="7" y2="4" />
+                <polyline points="3 8 7 4 11 8" />
+                <line x1="17" y1="4" x2="17" y2="20" />
+                <polyline points="13 16 17 20 21 16" />
+              </svg>
+            </button>
+
+            {/* Фильтр: «Тип ⌄» */}
+            <div
+              style={{
+                position: 'relative',
+                flex: 1,
+                minWidth: '85px',
+                background: '#181424',
+                borderRadius: '16px',
+                border: shopFilterType !== 'all' ? '1.5px solid #007aff' : '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              <select
+                value={shopFilterType}
+                onChange={(e) => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setShopFilterType(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  padding: '0 24px 0 12px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <option value="all">Тип</option>
+                {uniqueGiftTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  pointerEvents: 'none',
+                  fontSize: '10px',
+                  color: '#8b849b',
+                }}
+              >
+                ▼
+              </span>
+            </div>
+
+            {/* Фильтр: «Скин ⌄» */}
+            <div
+              style={{
+                position: 'relative',
+                flex: 1,
+                minWidth: '85px',
+                background: '#181424',
+                borderRadius: '16px',
+                border: shopFilterModel !== 'all' ? '1.5px solid #007aff' : '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              <select
+                value={shopFilterModel}
+                onChange={(e) => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setShopFilterModel(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  padding: '0 24px 0 12px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <option value="all">Скин</option>
+                {uniqueModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  pointerEvents: 'none',
+                  fontSize: '10px',
+                  color: '#8b849b',
+                }}
+              >
+                ▼
+              </span>
+            </div>
+
+            {/* Фильтр: «Фон ⌄» */}
+            <div
+              style={{
+                position: 'relative',
+                flex: 1,
+                minWidth: '85px',
+                background: '#181424',
+                borderRadius: '16px',
+                border: shopFilterBackdrop !== 'all' ? '1.5px solid #007aff' : '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              <select
+                value={shopFilterBackdrop}
+                onChange={(e) => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setShopFilterBackdrop(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  padding: '0 24px 0 12px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <option value="all">Фон</option>
+                {uniqueBackdrops.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  pointerEvents: 'none',
+                  fontSize: '10px',
+                  color: '#8b849b',
+                }}
+              >
+                ▼
+              </span>
+            </div>
           </div>
-          {bankVault.length === 0 ? (
-            <div style={{ background: '#171126', borderRadius: '24px', padding: '32px 18px', textAlign: 'center', border: '1px solid #271c47' }}>
+
+          {/* СПИСОК КАРТОЧЕК В МАГАЗИНЕ (3 В РЯД, СТИЛЬ ФОТО 2) */}
+          {filteredShopGifts.length === 0 ? (
+            <div style={{ background: '#171126', borderRadius: '24px', padding: '32px 18px', textAlign: 'center', border: '1px solid #271c47', marginTop: '10px' }}>
               <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img src={ICONS.gift} alt="Банк" style={{ width: '28px', height: '28px', filter: 'invert(1)' }} />
               </div>
-              <div style={{ fontSize: '15px', fontWeight: '800' }}>В банке пока нет доступных подарков</div>
+              <div style={{ fontSize: '15px', fontWeight: '800' }}>
+                {bankVault.length === 0 ? 'В банке пока нет подарков' : 'По выбранным фильтрам ничего не найдено'}
+              </div>
               <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '6px 0 14px 0' }}>
-                Подарки появятся здесь, как только они поступят на баланс <b>@GuseBank</b>
+                {bankVault.length === 0
+                  ? 'Подарки появятся здесь, как только они поступят на баланс @GuseBank'
+                  : 'Попробуйте сбросить фильтры'}
               </p>
+              {bankVault.length > 0 && (
+                <button
+                  onClick={() => {
+                    setShopFilterType('all');
+                    setShopFilterModel('all');
+                    setShopFilterBackdrop('all');
+                  }}
+                  style={{
+                    background: '#007aff',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    padding: '8px 18px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Сбросить фильтры
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {bankVault.map((gift) =>
-                renderTelegramNativeCard(gift, selectedTarget?.id === gift.id, () => {
-                  setActivePreset(null);
-                  setSelectedTarget(gift);
-                  setActiveTab('upgrade');
-                  setSubTab('targets');
-                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                })
-              )}
+              {filteredShopGifts.map((gift) => renderMarketplaceCard(gift))}
             </div>
           )}
         </div>
