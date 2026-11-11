@@ -680,6 +680,110 @@ export default function App() {
     );
   };
 
+  /**
+   * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА (ТОЧНО КАК НА ФОТО Heart Locket #1861):
+   * - Фон подарка растянут на весь слот 100% (object-fit: cover)
+   * - Сверху по центру овальная плашка с ценой: 💎 1,566.4
+   * - Снизу внутри карточки парящая капсула с названием подарка и серым серийным номером (#1861)
+   */
+  const renderArenaGiftCard = (gift: BankGift, extraSubText?: string) => {
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: '22px' }}>
+        {/* Картинка подарка вместе со своим фоном растягивается на всю карточку целиком */}
+        <img
+          src={gift.image_url}
+          alt={gift.name}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = '/icons/gift.png';
+          }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+
+        {/* Верхняя овальная плашка с ценой (по центру) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(18, 14, 28, 0.88)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            borderRadius: '16px',
+            padding: '3px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            zIndex: 3,
+            boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ fontSize: '11px' }}>💎</span>
+          <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffb703', letterSpacing: '-0.2px' }}>
+            {gift.price_ton}
+          </span>
+          {extraSubText && (
+            <span style={{ fontSize: '9px', fontWeight: '800', color: '#4ade80' }}>
+              {extraSubText}
+            </span>
+          )}
+        </div>
+
+        {/* Нижняя парящая тёмная капсула (как на фото 1: Heart Locket / #1861) */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '7px',
+            left: '7px',
+            right: '7px',
+            background: 'rgba(18, 14, 28, 0.88)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            borderRadius: '14px',
+            padding: '6px 8px',
+            textAlign: 'left',
+            zIndex: 3,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              color: '#ffffff',
+              lineHeight: '1.2',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {gift.name}
+          </div>
+          <div
+            style={{
+              fontSize: '9px',
+              fontWeight: '600',
+              color: '#8b849b',
+              marginTop: '1px',
+              letterSpacing: '0.2px',
+            }}
+          >
+            {gift.serial_number || '#0000'}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       style={{
@@ -1118,71 +1222,63 @@ export default function App() {
               <div
                 onClick={() => setSubTab('inventory')}
                 style={{
-                  width: '115px',
-                  height: '130px',
-                  borderRadius: '20px',
+                  width: '124px',
+                  height: '138px',
+                  borderRadius: '24px',
                   background: '#171126',
                   border: totalBetAmount > 0 ? '2px solid #a855f7' : '2px dashed #3a2b61',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '6px',
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
+                  boxShadow: selectedSource ? '0 6px 18px rgba(0,0,0,0.5)' : 'none',
                 }}
               >
                 {selectedSource ? (
                   <>
-                    <img src={selectedSource.image_url} alt="" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px', maxWidth: '95%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {selectedSource.name}
-                    </span>
-                    <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>
-                      💎 {totalBetAmount} {balanceBetTon > 0 && <span style={{ color: '#4ade80', fontSize: '9px' }}>(+{balanceBetTon})</span>}
-                    </span>
+                    {renderArenaGiftCard(selectedSource, balanceBetTon > 0 ? `+${balanceBetTon}` : undefined)}
+                    {/* Кнопка сброса предмета */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSource(null);
+                      }}
+                      title="Убрать подарок"
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        background: 'rgba(0,0,0,0.7)',
+                        border: 'none',
+                        color: '#fff',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                        lineHeight: '1',
+                        padding: 0,
+                        zIndex: 4,
+                      }}
+                    >
+                      ✕
+                    </button>
                   </>
                 ) : balanceBetTon > 0 ? (
                   <>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(0, 152, 234, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #0098ea', marginBottom: '4px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0, 152, 234, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #0098ea', marginBottom: '4px' }}>
                       <img src={ICONS.ton} alt="TON" style={{ width: '22px', height: '22px' }} />
                     </div>
                     <span style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Баланс</span>
-                    <span style={{ fontSize: '12px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
+                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
                       💎 {balanceBetTon} TON
                     </span>
                   </>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>Выбери подарок или баланс</span>
-                )}
-
-                {/* Кнопка сброса предмета */}
-                {selectedSource && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedSource(null);
-                    }}
-                    title="Убрать подарок"
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      background: 'rgba(0,0,0,0.6)',
-                      border: 'none',
-                      color: '#fff',
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      fontSize: '10px',
-                      lineHeight: '1',
-                      padding: 0,
-                    }}
-                  >
-                    ✕
-                  </button>
+                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600', padding: '0 8px' }}>Выбери подарок или баланс</span>
                 )}
               </div>
 
@@ -1208,13 +1304,13 @@ export default function App() {
                 </svg>
               </div>
 
-              {/* ПРАВАЯ КАРТОЧКА: ЦЕЛЬ (БАЛАНС TON ИЛИ ПОДАРОК) */}
+              {/* ПРАВАЯ КАРТОЧКА: ЦЕЛЬ (БАЛАНС TON ИЛИ ПОДАРОК КАК НА ФОТО Heart Locket) */}
               <div
                 onClick={() => setSubTab('targets')}
                 style={{
-                  width: '115px',
-                  height: '130px',
-                  borderRadius: '20px',
+                  width: '124px',
+                  height: '138px',
+                  borderRadius: '24px',
                   background: '#171126',
                   border: hasTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
                   display: 'flex',
@@ -1222,15 +1318,15 @@ export default function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  padding: '6px',
                   position: 'relative',
                   overflow: 'hidden',
+                  boxShadow: selectedTarget ? '0 6px 18px rgba(0,0,0,0.5)' : 'none',
                 }}
               >
                 {activePreset && targetBalanceTon > 0 ? (
                   <>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(234, 179, 8, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #eab308', marginBottom: '4px' }}>
-                      <img src={ICONS.ton} alt="TON" style={{ width: '22px', height: '22px' }} />
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(234, 179, 8, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #eab308', marginBottom: '4px' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '24px', height: '24px' }} />
                     </div>
                     <span style={{ fontSize: '10px', color: '#eab308', fontWeight: '800', textTransform: 'uppercase' }}>Баланс TON</span>
                     <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
@@ -1238,13 +1334,7 @@ export default function App() {
                     </span>
                   </>
                 ) : selectedTarget ? (
-                  <>
-                    <img src={selectedTarget.image_url} alt="" style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '4px', maxWidth: '95%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {selectedTarget.name}
-                    </span>
-                    <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedTarget.price_ton}</span>
-                  </>
+                  renderArenaGiftCard(selectedTarget)
                 ) : (
                   <span style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700' }}>Цель</span>
                 )}
