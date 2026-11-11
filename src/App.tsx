@@ -373,15 +373,10 @@ export default function App() {
     const winZoneStart = 360 - sectorSpan;
     const padding = Math.min(3, sectorSpan * 0.05);
 
-    let targetAngle = 0;
-    if (isWin) {
-      // Случайная точка строго внутри оранжевого сектора
-      targetAngle = winZoneStart + padding + Math.random() * (sectorSpan - padding * 2);
-    } else {
-      // Случайная точка строго внутри тёмной зоны
-      const looseSpan = 360 - sectorSpan;
-      targetAngle = padding + Math.random() * (looseSpan - padding * 2);
-    }
+    // Вычисляем целевой угол сразу без лишних присваиваний (чтобы не ругался eslint)
+    const targetAngle = isWin
+      ? winZoneStart + padding + Math.random() * (sectorSpan - padding * 2)
+      : padding + Math.random() * ((360 - sectorSpan) - padding * 2);
 
     // Вычисляем плавный доворот с полными оборотами
     const currentMod = arrowAngle % 360;
@@ -565,7 +560,6 @@ export default function App() {
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
 
   // Оранжевый сектор начинается ровно снизу у отметки 0% (180°) и идёт по правой стороне вверх
-  // Ровно как на прикреплённом скриншоте!
   const wheelConic = chance > 0
     ? `conic-gradient(from 180deg, #181424 0%, #181424 ${100 - chance}%, #ffb703 ${100 - chance}%, #fb8500 100%)`
     : '#181424';
