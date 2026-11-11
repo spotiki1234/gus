@@ -69,7 +69,11 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
 
-  // Переключатель под кнопкой: «Инвентарь» / «Желаемый предмет»
+  // Режим ставки: только предмет из инвентаря ИЛИ только ставка балансом TON
+  const [betMode, setBetMode] = useState<'item' | 'balance'>('item');
+  const [balanceBetInput, setBalanceBetInput] = useState<string>('0.5');
+
+  // Переключатель под рулеткой: «Инвентарь/Ставка» / «Желаемый предмет»
   const [subTab, setSubTab] = useState<'inventory' | 'targets'>('inventory');
 
   // Быстрая анимация рулетки (молния)
@@ -233,10 +237,15 @@ export default function App() {
     }
   };
 
+  // Получаем текущую стоимость ставки (либо из выбранного предмета, либо из суммы TON)
+  const currentBetAmount = betMode === 'balance' 
+    ? (parseFloat(balanceBetInput) || 0)
+    : (selectedSource ? selectedSource.price_ton : 0);
+
   const calculateChance = (): number => {
-    if (!selectedSource || !selectedTarget) return 0;
-    if (selectedSource.price_ton >= selectedTarget.price_ton) return 0;
-    const raw = (selectedSource.price_ton / selectedTarget.price_ton) * 0.95 * 100;
+    if (!selectedTarget || currentBetAmount <= 0) return 0;
+    if (currentBetAmount >= selectedTarget.price_ton) return 0;
+    const raw = (currentBetAmount / selectedTarget.price_ton) * 0.95 * 100;
     return Math.min(Math.max(Number(raw.toFixed(2)), 1.0), 85.0);
   };
 
@@ -301,12 +310,12 @@ export default function App() {
 
     setActivePreset(presetId);
 
-    if (!selectedSource || bankVault.length === 0) {
+    if (currentBetAmount <= 0 || bankVault.length === 0) {
       setSubTab('targets');
       return;
     }
 
-    const sourcePrice = selectedSource.price_ton;
+    const sourcePrice = currentBetAmount;
     let targetPrice = 0;
 
     if (multiplierVal) {
@@ -326,8 +335,22 @@ export default function App() {
     setSubTab('targets');
   };
 
+  // Запуск апгрейда (поддерживает и ставку предметом, и ставку балансом)
   const handleUpgrade = () => {
-    if (!selectedSource || !selectedTarget || isSpinning || chance <= 0) return;
+    if (!selectedTarget || isSpinning || chance <= 0) return;
+
+    if (betMode === 'balance') {
+      const betVal = parseFloat(balanceBetInput) || 0;
+      if (betVal <= 0 || betVal > balanceTon) {
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+        return;
+      }
+      // Списываем ставку с баланса
+      const newBal = Number(Math.max(0, balanceTon - betVal).toFixed(2));
+      saveBalanceToDb(newBal);
+    } else {
+      if (!selectedSource) return;
+    }
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy');
     setIsSpinning(true);
@@ -348,16 +371,28 @@ export default function App() {
       if (isWin) {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
-        setUserInventory((prev) => [
-          ...prev.filter((i) => i.id !== selectedSource.id),
-          { ...selectedTarget, id: Date.now() },
-        ]);
+
+        // Если выиграли — добавляем целевой подарок в инвентарь
+        if (betMode === 'item' && selectedSource) {
+          setUserInventory((prev) => [
+            ...prev.filter((i) => i.id !== selectedSource.id),
+            { ...selectedTarget, id: Date.now() },
+          ]);
+        } else {
+          setUserInventory((prev) => [
+            ...prev,
+            { ...selectedTarget, id: Date.now() },
+          ]);
+        }
+
         setSelectedSource(null);
         setSelectedTarget(null);
         setActivePreset(null);
       } else {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
-        setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
+        if (betMode === 'item' && selectedSource) {
+          setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
+        }
         setSelectedSource(null);
         setActivePreset(null);
       }
@@ -481,6 +516,10 @@ export default function App() {
     ? `${wallet.account.address.slice(0, 4)}...${wallet.account.address.slice(-4)}`
     : '';
 
+  const canUpgrade = !isSpinning && selectedTarget && chance > 0 && (
+    betMode === 'item' ? !!selectedSource : (parseFloat(balanceBetInput) > 0 && parseFloat(balanceBetInput) <= balanceTon)
+  );
+
   return (
     <div
       style={{
@@ -492,7 +531,6 @@ export default function App() {
         zoom: 0.91,
       }}
     >
-      {/* Стили для отключения белых стрелок у input[type=number] */}
       <style>{`
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button {
@@ -689,7 +727,7 @@ export default function App() {
             </div>
 
             {/* Круговая рулетка */}
-            <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 18px auto' }}>
+            <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 14px auto' }}>
               <div
                 style={{
                   width: '100%',
@@ -726,35 +764,52 @@ export default function App() {
               </div>
             </div>
 
-            {/* Карточки апгрейда */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
+            {/* Карточки: Ставка (Предмет / Баланс) -> Цель */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+              {/* ЛЕВАЯ КАРТОЧКА (ИСТОЧНИК СТАВКИ) */}
               <div
                 onClick={() => setSubTab('inventory')}
                 style={{
-                  width: '110px',
-                  height: '120px',
+                  width: '120px',
+                  height: '128px',
                   borderRadius: '20px',
                   background: '#171126',
-                  border: selectedSource ? '2px solid #a855f7' : '2px dashed #3a2b61',
+                  border: (betMode === 'item' ? !!selectedSource : parseFloat(balanceBetInput) > 0)
+                    ? '2px solid #a855f7'
+                    : '2px dashed #3a2b61',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: '6px',
                   cursor: 'pointer',
+                  position: 'relative',
                 }}
               >
-                {selectedSource ? (
-                  <>
-                    <img src={selectedSource.image_url} alt="" style={{ width: '42px', height: '42px', objectFit: 'contain' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '6px' }}>{selectedSource.name}</span>
-                    <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedSource.price_ton}</span>
-                  </>
+                {betMode === 'item' ? (
+                  selectedSource ? (
+                    <>
+                      <img src={selectedSource.image_url} alt="" style={{ width: '42px', height: '42px', objectFit: 'contain' }} />
+                      <span style={{ fontSize: '11px', fontWeight: '800', marginTop: '6px' }}>{selectedSource.name}</span>
+                      <span style={{ fontSize: '10px', color: '#0098ea', fontWeight: '700' }}>💎 {selectedSource.price_ton}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>Выбери из инвентаря</span>
+                  )
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600' }}>Выбери из инвентаря</span>
+                  <>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(0, 152, 234, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #0098ea', marginBottom: '4px' }}>
+                      <img src={ICONS.ton} alt="TON" style={{ width: '22px', height: '22px' }} />
+                    </div>
+                    <span style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Ставка TON</span>
+                    <span style={{ fontSize: '14px', color: '#0098ea', fontWeight: '900', marginTop: '2px' }}>
+                      💎 {parseFloat(balanceBetInput) || 0}
+                    </span>
+                  </>
                 )}
               </div>
 
+              {/* Стрелка перехода */}
               <div
                 style={{
                   width: '32px',
@@ -776,11 +831,12 @@ export default function App() {
                 </svg>
               </div>
 
+              {/* ПРАВАЯ КАРТОЧКА (ЖЕЛАЕМЫЙ ПРЕДМЕТ) */}
               <div
                 onClick={() => setSubTab('targets')}
                 style={{
-                  width: '110px',
-                  height: '120px',
+                  width: '120px',
+                  height: '128px',
                   borderRadius: '20px',
                   background: '#171126',
                   border: selectedTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
@@ -806,22 +862,30 @@ export default function App() {
 
             <button
               onClick={handleUpgrade}
-              disabled={!selectedSource || !selectedTarget || isSpinning || chance <= 0}
+              disabled={!canUpgrade}
               style={{
                 width: '100%',
                 padding: '14px',
                 borderRadius: '18px',
                 border: 'none',
-                background: isSpinning ? '#3b2d6b' : !selectedSource || !selectedTarget ? '#231a3b' : 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
+                background: isSpinning
+                  ? '#3b2d6b'
+                  : !canUpgrade
+                  ? '#231a3b'
+                  : 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
                 color: '#fff',
                 fontSize: '15px',
                 fontWeight: '800',
-                cursor: !selectedSource || !selectedTarget || isSpinning ? 'not-allowed' : 'pointer',
-                boxShadow: selectedSource && selectedTarget ? '0 4px 18px rgba(168, 85, 247, 0.4)' : 'none',
+                cursor: !canUpgrade ? 'not-allowed' : 'pointer',
+                boxShadow: canUpgrade ? '0 4px 18px rgba(168, 85, 247, 0.4)' : 'none',
                 transition: 'all 0.2s',
               }}
             >
-              {isSpinning ? (isFastSpin ? '⚡ БЫСТРАЯ КРУТКА...' : 'КРУТИМ РУЛЕТКУ...') : 'Улучшить'}
+              {isSpinning
+                ? (isFastSpin ? '⚡ БЫСТРАЯ КРУТКА...' : 'КРУТИМ РУЛЕТКУ...')
+                : betMode === 'balance' && parseFloat(balanceBetInput) > balanceTon
+                ? 'Недостаточно TON'
+                : 'Улучшить'}
             </button>
           </div>
 
@@ -868,7 +932,7 @@ export default function App() {
             })}
           </div>
 
-          {/* Инвентарь / Желаемый предмет */}
+          {/* ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ: «Ставка» / «Желаемый предмет» */}
           <div
             style={{
               marginTop: '14px',
@@ -898,7 +962,7 @@ export default function App() {
                 transition: 'all 0.15s ease',
               }}
             >
-              Инвентарь
+              Выбор ставки
             </button>
             <button
               onClick={() => {
@@ -922,88 +986,224 @@ export default function App() {
             </button>
           </div>
 
+          {/* КОНТЕНТ ТАБОВ */}
           <div style={{ marginTop: '14px' }}>
+            {/* ТАБ 1: ВЫБОР СТАВКИ (Инвентарь ИЛИ Только баланс TON) */}
             {subTab === 'inventory' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                {/* ПЕРЕКЛЮЧАТЕЛЬ: «Предмет» / «Только баланс TON» */}
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '6px',
+                    marginBottom: '12px',
+                    background: '#18122c',
+                    borderRadius: '16px',
+                    padding: '3px',
+                    border: '1px solid #291d47',
+                  }}
+                >
                   <button
                     onClick={() => {
-                      setIsDepositOpen(true);
-                      setDepositStep('methods');
+                      setBetMode('item');
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                     }}
                     style={{
-                      background: 'none',
+                      flex: 1,
+                      padding: '8px 0',
+                      borderRadius: '13px',
                       border: 'none',
-                      color: '#eab308',
+                      background: betMode === 'item' ? '#a855f7' : 'transparent',
+                      color: '#fff',
                       fontSize: '12px',
-                      fontWeight: '700',
+                      fontWeight: '800',
                       cursor: 'pointer',
+                      transition: 'all 0.15s',
                     }}
                   >
-                    Пополнить
+                    🎁 Подарок
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBetMode('balance');
+                      setSelectedSource(null);
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 0',
+                      borderRadius: '13px',
+                      border: 'none',
+                      background: betMode === 'balance' ? '#0098ea' : 'transparent',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    💎 Только баланс TON
                   </button>
                 </div>
 
-                {userInventory.length === 0 ? (
-                  <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
-                    <div style={{ width: '48px', height: '48px', margin: '0 auto 12px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
-                    </div>
-                    <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '14px' }}>Ваш инвентарь пуст</div>
-                    <button
-                      onClick={() => {
-                        setActiveTab('shop');
-                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                      }}
-                      style={{
-                        background: '#a855f7',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '16px',
-                        padding: '12px 24px',
-                        fontWeight: '800',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 16px rgba(168, 85, 247, 0.4)',
-                      }}
-                    >
-                      Купить предмет в магазине
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                    {userInventory.map((gift) => (
-                      <div
-                        key={gift.id}
+                {/* РЕЖИМ 1: СТАВКА ТОЛЬКО БАЛАНСОМ TON */}
+                {betMode === 'balance' && (
+                  <div
+                    style={{
+                      background: '#130e24',
+                      borderRadius: '22px',
+                      padding: '16px',
+                      border: '1px solid #271c47',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '700' }}>
+                        Доступно: <b style={{ color: '#0098ea' }}>{balanceTon.toFixed(2)} TON</b>
+                      </span>
+                      <button
                         onClick={() => {
-                          setSelectedSource(gift);
-                          window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                          setIsDepositOpen(true);
+                          setDepositStep('methods');
                         }}
                         style={{
-                          background: '#1c1433',
-                          borderRadius: '20px',
-                          padding: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
+                          background: 'none',
+                          border: 'none',
+                          color: '#eab308',
+                          fontSize: '11px',
+                          fontWeight: '800',
                           cursor: 'pointer',
-                          border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
-                          boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
-                          transition: 'all 0.2s',
                         }}
                       >
-                        <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
-                          💎 {gift.price_ton}
+                        + Пополнить
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={balanceBetInput}
+                        onChange={(e) => {
+                          const clean = e.target.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+                          setBalanceBetInput(clean);
+                        }}
+                        style={{
+                          width: '120px',
+                          background: '#1a1333',
+                          border: '1.5px solid #0098ea',
+                          borderRadius: '16px',
+                          padding: '8px 12px',
+                          fontSize: '22px',
+                          fontWeight: '900',
+                          color: '#0098ea',
+                          textAlign: 'center',
+                          outline: 'none',
+                        }}
+                      />
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#0098ea' }}>TON</span>
+                    </div>
+
+                    {/* Быстрые кнопки выбора суммы ставки */}
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {['0.1', '0.5', '1.0', '2.5', 'MAX'].map((val) => (
+                        <button
+                          key={val}
+                          onClick={() => {
+                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                            if (val === 'MAX') {
+                              setBalanceBetInput(String(balanceTon));
+                            } else {
+                              setBalanceBetInput(val);
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '7px 0',
+                            borderRadius: '12px',
+                            border: '1px solid #2e2254',
+                            background: '#1b1436',
+                            color: '#fff',
+                            fontWeight: '800',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {val}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* РЕЖИМ 2: СТАВКА ПРЕДМЕТОМ ИЗ ИНВЕНТАРЯ */}
+                {betMode === 'item' && (
+                  <div>
+                    {userInventory.length === 0 ? (
+                      <div style={{ background: '#130e24', borderRadius: '22px', padding: '24px 16px', textAlign: 'center', border: '1px solid #271c47' }}>
+                        <div style={{ width: '48px', height: '48px', margin: '0 auto 12px auto', background: '#20163d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src={ICONS.gift} alt="Инвентарь" style={{ width: '24px', height: '24px', filter: 'invert(1)' }} />
                         </div>
-                        <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
-                        <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                        <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '14px' }}>В инвентаре нет предметов</div>
+                        <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '0 0 14px 0' }}>
+                          Вы можете играть на баланс TON или пополнить подарками
+                        </p>
+                        <button
+                          onClick={() => {
+                            setBetMode('balance');
+                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                          }}
+                          style={{
+                            background: '#0098ea',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '16px',
+                            padding: '12px 20px',
+                            fontWeight: '800',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Играть на баланс TON
+                        </button>
                       </div>
-                    ))}
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                        {userInventory.map((gift) => (
+                          <div
+                            key={gift.id}
+                            onClick={() => {
+                              setSelectedSource(gift);
+                              window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                            }}
+                            style={{
+                              background: '#1c1433',
+                              borderRadius: '20px',
+                              padding: '8px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              cursor: 'pointer',
+                              border: selectedSource?.id === gift.id ? '2px solid #a855f7' : '1px solid #2d2150',
+                              boxShadow: selectedSource?.id === gift.id ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '800', color: '#0098ea', alignSelf: 'flex-start' }}>
+                              💎 {gift.price_ton}
+                            </div>
+                            <img src={gift.image_url} alt="" style={{ width: '46px', height: '46px', margin: '6px 0', objectFit: 'contain' }} />
+                            <div style={{ fontSize: '10px', fontWeight: '700' }}>{gift.name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
+            {/* ТАБ 2: ЖЕЛАЕМЫЙ ПРЕДМЕТ (БАНК) */}
             {subTab === 'targets' && (
               <div>
                 {bankVault.length === 0 ? (
@@ -1017,7 +1217,7 @@ export default function App() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                     {bankVault.map((gift) => {
                       const isSelected = selectedTarget?.id === gift.id;
-                      const isLowerPrice = selectedSource && gift.price_ton <= selectedSource.price_ton;
+                      const isLowerPrice = currentBetAmount > 0 && gift.price_ton <= currentBetAmount;
                       return (
                         <div
                           key={gift.id}
@@ -1471,6 +1671,7 @@ export default function App() {
                       key={gift.id}
                       onClick={() => {
                         setSelectedSource(gift);
+                        setBetMode('item');
                         setIsProfileOpen(false);
                         setActiveTab('upgrade');
                         setSubTab('targets');
@@ -1538,10 +1739,8 @@ export default function App() {
               </button>
             </div>
 
-            {/* СПИСОК СПОСОБОВ ПОПОЛНЕНИЯ */}
             {depositStep === 'methods' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {/* 1. ПОПОЛНЕНИЕ ПОДАРКАМИ */}
                 <div
                   onClick={() => setDepositStep('gifts')}
                   style={{
@@ -1568,7 +1767,6 @@ export default function App() {
                   <span style={{ color: '#c084fc', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 2. ЗВЁЗДЫ */}
                 <div
                   onClick={() => setDepositStep('stars')}
                   style={{
@@ -1594,7 +1792,6 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 3. TON CONNECT */}
                 <div
                   onClick={() => setDepositStep('wallet')}
                   style={{
@@ -1620,7 +1817,6 @@ export default function App() {
                   <span style={{ color: '#8b7fa8', fontSize: '18px' }}>›</span>
                 </div>
 
-                {/* 4. CRYPTOBOT */}
                 <div
                   onClick={() => {
                     setDepositStep('cryptobot');
@@ -1651,7 +1847,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ЭКРАН ПОПОЛНЕНИЯ ПОДАРКАМИ */}
             {depositStep === 'gifts' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '60px', height: '60px', margin: '0 auto 10px auto', background: 'rgba(168, 85, 247, 0.15)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #a855f7' }}>
@@ -1721,7 +1916,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ЗВЁЗДЫ */}
             {depositStep === 'stars' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1813,7 +2007,6 @@ export default function App() {
               </div>
             )}
 
-            {/* CRYPTOBOT */}
             {depositStep === 'cryptobot' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 8px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1890,7 +2083,6 @@ export default function App() {
               </div>
             )}
 
-            {/* WALLET */}
             {depositStep === 'wallet' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', margin: '0 auto 10px auto', borderRadius: '14px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
