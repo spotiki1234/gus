@@ -56,21 +56,18 @@ interface BankGift {
 }
 
 /**
- * АВТОМАТИЧЕСКИЙ НОРМАЛИЗАТОР ССЫЛОК НА ПОДАРКИ:
- * Превращает ЛЮБЫЕ ссылки (t.me/i/nft/..., t.me/nft/..., fragment.com, пустые строки)
- * в гарантированно рабочую прямую ссылку на официальный CDN картинок Fragment (nft.fragment.com).
- * Благодаря этой функции картинка отобразится ВСЕГДА, даже если в базе ссылка кривая!
+ * АВТОМАТИЧЕСКИЙ НОРМАЛИЗАТОР ССЫЛОК:
+ * Исправляет t.me/i/nft, битые ссылки и подставляет прямой CDN Fragment
+ * (Не экспортируется наружу ради совместимости с Fast Refresh)
  */
-export function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
+function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
   const cleanSlug = (slug || '').trim();
-  let url = (rawUrl || '').trim();
+  const url = (rawUrl || '').trim();
 
-  // Если URL вообще не указан, но есть slug (например: LolPop-401733)
   if (!url && cleanSlug) {
     return `https://nft.fragment.com/gift/${cleanSlug}.webp`;
   }
 
-  // Если передали кривую ссылку через Telegram (https://t.me/i/nft/... или https://t.me/nft/...)
   if (url.includes('t.me/i/nft/') || url.includes('t.me/nft/')) {
     const extracted = url.split('/').pop()?.replace(/\.(png|webp|jpg|jpeg)$/i, '') || cleanSlug;
     if (extracted) {
@@ -78,7 +75,6 @@ export function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
     }
   }
 
-  // Если передали страницу Fragment вместо прямой картинки
   if (url.includes('fragment.com/gift/') && !url.includes('nft.fragment.com')) {
     const extracted = url.split('/').pop()?.replace(/\.(png|webp|jpg|jpeg)$/i, '') || cleanSlug;
     if (extracted) {
@@ -86,7 +82,6 @@ export function getDirectGiftImageUrl(rawUrl?: string, slug?: string): string {
     }
   }
 
-  // Если ввели просто название и номер без http (например: LolPop-401733)
   if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
     return `https://nft.fragment.com/gift/${url.replace(/\.(png|webp|jpg|jpeg)$/i, '')}.webp`;
   }
@@ -109,6 +104,7 @@ export default function App() {
   const [balanceTon, setBalanceTon] = useState<number>(0.0);
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
+  const [isBuying, setIsBuying] = useState<number | null>(null);
 
   // Ползунок ставки балансом: процент от баланса (0%..100%)
   const [balanceSliderPercent, setBalanceSliderPercent] = useState<number>(0);
@@ -121,7 +117,7 @@ export default function App() {
     return localStorage.getItem('guse_fast_spin') === 'true';
   });
 
-  // Настраиваемые коэффициенты X (по умолчанию: x2, x4, x8)
+  // Настраиваемые коэффициенты X (x2, x4, x8)
   const [customMultipliers, setCustomMultipliers] = useState<[number, number, number]>(() => {
     const saved = localStorage.getItem('guse_custom_multipliers');
     if (saved) {
@@ -135,7 +131,7 @@ export default function App() {
     return [2, 4, 8];
   });
 
-  // Настраиваемые проценты % (по умолчанию: 35%, 55%, 75%)
+  // Настраиваемые проценты % (35%, 55%, 75%)
   const [customPercents, setCustomPercents] = useState<[number, number, number]>(() => {
     const saved = localStorage.getItem('guse_custom_percents');
     if (saved) {
@@ -149,7 +145,7 @@ export default function App() {
     return [35, 55, 75];
   });
 
-  // Фильтры и сортировка в магазине (как на фото)
+  // Фильтры и сортировка в магазине
   const [shopSortOrder, setShopSortOrder] = useState<'asc' | 'desc'>('asc');
   const [shopFilterType, setShopFilterType] = useState<string>('all');
   const [shopFilterModel, setShopFilterModel] = useState<string>('all');
@@ -160,7 +156,7 @@ export default function App() {
   const [tempPercents, setTempPercents] = useState<[string, string, string]>(['35', '55', '75']);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Активный выбранный пресет кнопки (x2, x4, x8, 35%, 55%, 75%)
+  // Активный выбранный пресет кнопки
   const [activePreset, setActivePreset] = useState<string | null>(null);
 
   // Онлайн
@@ -183,7 +179,7 @@ export default function App() {
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
-  // Угол поворота стрелки вокруг колеса (колесо неподвижно)
+  // Угол поворота стрелки вокруг колеса
   const [arrowAngle, setArrowAngle] = useState<number>(0);
 
   // Шторки
@@ -199,10 +195,11 @@ export default function App() {
   const wallet = useTonWallet();
   const userFriendlyAddress = useTonAddress();
 
+  // Загрузка инвентаря пользователя из базы данных
   const loadInventory = useCallback(() => {
     if (!tgUser.id) return;
     setIsCheckingInventory(true);
-    fetch(`/api/inventory/${tgUser.id}`)
+    fetch(`/api/inventory/${tgUser.id}?t=${Date.now()}`)
       .then((res) => res.json())
       .then((data: { items?: BankGift[] }) => {
         if (data.items) setUserInventory(data.items);
@@ -211,6 +208,17 @@ export default function App() {
       .finally(() => setIsCheckingInventory(false));
   }, [tgUser.id]);
 
+  // Загрузка банка подарков
+  const loadBankGifts = useCallback(() => {
+    fetch(`/api/bank-gifts?t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((data: { available_gifts?: BankGift[] }) => {
+        if (data.available_gifts) setBankVault(data.available_gifts);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Первоначальная инициализация
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -219,7 +227,7 @@ export default function App() {
     }
 
     if (tgUser.id) {
-      fetch(`/api/user-balance?userId=${tgUser.id}`)
+      fetch(`/api/user-balance?userId=${tgUser.id}&t=${Date.now()}`)
         .then((res) => res.json())
         .then((data: { ton?: number }) => {
           if (typeof data.ton === 'number') setBalanceTon(data.ton);
@@ -229,7 +237,8 @@ export default function App() {
           if (t) setBalanceTon(parseFloat(t));
         });
 
-      fetch(`/api/inventory/${tgUser.id}`)
+      // Асинхронный вызов без синхронного setState в теле effect
+      fetch(`/api/inventory/${tgUser.id}?t=${Date.now()}`)
         .then((res) => res.json())
         .then((data: { items?: BankGift[] }) => {
           if (data.items) setUserInventory(data.items);
@@ -237,14 +246,12 @@ export default function App() {
         .catch(() => {});
     }
 
-    fetch('/api/bank-gifts')
-      .then((res) => res.json())
-      .then((data: { available_gifts?: BankGift[] }) => {
-        if (data.available_gifts) setBankVault(data.available_gifts);
-      })
-      .catch(() => {});
+    loadBankGifts();
 
-    // Честный пинг реального онлайна
+    // Автоматический опрос банка подарков каждые 4 секунды
+    const bankInterval = setInterval(loadBankGifts, 4000);
+
+    // Онлайн пинг
     const pingOnline = () => {
       fetch('/api/online', {
         method: 'POST',
@@ -261,10 +268,13 @@ export default function App() {
     };
 
     pingOnline();
-    const interval = setInterval(pingOnline, 15000);
+    const onlineInterval = setInterval(pingOnline, 15000);
 
-    return () => clearInterval(interval);
-  }, [tgUser.id]);
+    return () => {
+      clearInterval(bankInterval);
+      clearInterval(onlineInterval);
+    };
+  }, [tgUser.id, loadBankGifts]);
 
   const saveBalanceToDb = async (newTon: number) => {
     setBalanceTon(newTon);
@@ -281,12 +291,16 @@ export default function App() {
         }),
       });
     } catch (e) {
-      console.error('Ошибка сохранения баланса в БД:', e);
+      console.error('Ошибка сохранения баланса:', e);
     }
   };
 
-  // Покупка предмета прямо в магазине
+  /**
+   * НАСТОЯЩАЯ ПОКУПКА В МАГАЗИНЕ С СИНХРОНИЗАЦИЕЙ В БД
+   */
   const handleBuyGiftInShop = async (gift: BankGift) => {
+    if (isBuying) return;
+
     if (balanceTon < gift.price_ton) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
       setIsDepositOpen(true);
@@ -294,18 +308,47 @@ export default function App() {
       return;
     }
 
+    setIsBuying(gift.id);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy');
-    const newBal = Number((balanceTon - gift.price_ton).toFixed(2));
-    saveBalanceToDb(newBal);
 
-    setUserInventory((prev) => [...prev, { ...gift, id: Date.now() }]);
-    setBankVault((prev) => prev.filter((g) => g.id !== gift.id));
+    try {
+      const res = await fetch('/api/shop/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: tgUser.id,
+          giftId: gift.id,
+        }),
+      });
 
-    confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Ошибка при покупке');
+      }
+
+      if (typeof data.newBalance === 'number') {
+        setBalanceTon(data.newBalance);
+        localStorage.setItem(`ton_${tgUser.id}`, String(data.newBalance));
+      }
+
+      if (data.item) {
+        setUserInventory((prev) => [data.item, ...prev.filter((i) => i.id !== data.item.id)]);
+      }
+      setBankVault((prev) => prev.filter((g) => g.id !== gift.id));
+
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Не удалось купить подарок';
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+      alert(message);
+      loadBankGifts();
+    } finally {
+      setIsBuying(null);
+    }
   };
 
-  // Опции для фильтров в магазине
+  // Опции для фильтров
   const uniqueGiftTypes = useMemo(() => {
     const set = new Set<string>();
     bankVault.forEach((g) => {
@@ -330,7 +373,6 @@ export default function App() {
     return Array.from(set);
   }, [bankVault]);
 
-  // Отфильтрованные и отсортированные подарки в магазине
   const filteredShopGifts = useMemo(() => {
     return bankVault
       .filter((g) => {
@@ -346,12 +388,9 @@ export default function App() {
       });
   }, [bankVault, shopFilterType, shopFilterModel, shopFilterBackdrop, shopSortOrder]);
 
-  // Сумма ставки с баланса по полоске
   const balanceBetTon = Number(((balanceTon * balanceSliderPercent) / 100).toFixed(2));
-  // Общая сумма ставки: предмет из инвентаря + добавка с баланса
   const totalBetAmount = Number(((selectedSource ? selectedSource.price_ton : 0) + balanceBetTon).toFixed(2));
 
-  // Вычисление целевой суммы TON, если цель задана кнопками коэффициентов/процентов
   const calculateTargetBalanceTon = (): number => {
     if (!activePreset || totalBetAmount <= 0) return 0;
     if (activePreset === 'm1') return Number((totalBetAmount * customMultipliers[0]).toFixed(2));
@@ -364,8 +403,6 @@ export default function App() {
   };
 
   const targetBalanceTon = calculateTargetBalanceTon();
-
-  // Итоговая стоимость цели
   const targetPriceTon = activePreset && targetBalanceTon > 0
     ? targetBalanceTon
     : (selectedTarget ? selectedTarget.price_ton : 0);
@@ -384,7 +421,6 @@ export default function App() {
 
   const chance = calculateChance();
 
-  // Подпись сложности шанса
   const getChanceLabel = (c: number): string => {
     if (c <= 0) return 'Ожидание';
     if (c < 25) return 'Низкий шанс';
@@ -392,7 +428,6 @@ export default function App() {
     return 'Высокий шанс';
   };
 
-  // Быстрая крутка (молния)
   const toggleFastSpin = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     setIsFastSpin((prev) => {
@@ -402,7 +437,6 @@ export default function App() {
     });
   };
 
-  // Сброс множителей по умолчанию
   const resetMultipliers = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
     setTempMultipliers(['2', '4', '8']);
@@ -410,7 +444,6 @@ export default function App() {
     localStorage.setItem('guse_custom_multipliers', JSON.stringify([2, 4, 8]));
   };
 
-  // Сброс процентов по умолчанию
   const resetPercents = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
     setTempPercents(['35', '55', '75']);
@@ -418,7 +451,6 @@ export default function App() {
     localStorage.setItem('guse_custom_percents', JSON.stringify([35, 55, 75]));
   };
 
-  // Сохранение настроек в модалке «Быстрый подбор»
   const handleSaveSettings = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
@@ -439,7 +471,6 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
-  // Клик по кнопкам коэффициента/процентов
   const handlePresetClick = (presetId: string) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
@@ -456,8 +487,10 @@ export default function App() {
     setSelectedTarget(null);
   };
 
-  // Апгрейд: КОЛЕСО СИММЕТРИЧНО ВНИЗУ, КРУТИТСЯ СТРЕЛКА ВОКРУГ КОЛЕСА
-  const handleUpgrade = () => {
+  /**
+   * АПГРЕЙД: БЕЗОПАСНАЯ ЛОГИКА
+   */
+  const handleUpgrade = async () => {
     if (isSpinning || chance <= 0 || totalBetAmount <= 0 || targetPriceTon <= totalBetAmount) return;
 
     if (balanceBetTon > balanceTon) {
@@ -468,76 +501,88 @@ export default function App() {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy');
     setIsSpinning(true);
 
-    const roll = Math.random() * 100;
-    const isWin = roll < chance;
+    try {
+      const roll = Math.random() * 100;
+      const isWin = roll < chance;
 
-    const sectorSpan = (chance / 100) * 360;
-    const halfSpan = sectorSpan / 2;
-    const padding = Math.min(3, sectorSpan * 0.05);
+      const sectorSpan = (chance / 100) * 360;
+      const halfSpan = sectorSpan / 2;
+      const padding = Math.min(3, sectorSpan * 0.05);
 
-    const targetAngle = isWin
-      ? (Math.random() - 0.5) * (sectorSpan - padding * 2)
-      : halfSpan + padding + Math.random() * ((360 - sectorSpan) - padding * 2);
+      const targetAngle = isWin
+        ? (Math.random() - 0.5) * (sectorSpan - padding * 2)
+        : halfSpan + padding + Math.random() * ((360 - sectorSpan) - padding * 2);
 
-    const normalizedTarget = (targetAngle % 360 + 360) % 360;
-    const currentMod = (arrowAngle % 360 + 360) % 360;
-    let diff = normalizedTarget - currentMod;
-    if (diff < 0) diff += 360;
+      const normalizedTarget = (targetAngle % 360 + 360) % 360;
+      const currentMod = (arrowAngle % 360 + 360) % 360;
+      let diff = normalizedTarget - currentMod;
+      if (diff < 0) diff += 360;
 
-    const extraFullSpins = isFastSpin ? 360 * 3 : 360 * 6;
-    const nextArrowAngle = arrowAngle + extraFullSpins + diff;
-    setArrowAngle(nextArrowAngle);
+      const extraFullSpins = isFastSpin ? 360 * 3 : 360 * 6;
+      const nextArrowAngle = arrowAngle + extraFullSpins + diff;
+      setArrowAngle(nextArrowAngle);
 
-    const spinDuration = isFastSpin ? 800 : 3200;
+      const spinDuration = isFastSpin ? 800 : 3200;
 
-    // Списываем поставленный баланс
-    let currentBal = balanceTon;
-    if (balanceBetTon > 0) {
-      currentBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
-      saveBalanceToDb(currentBal);
-    }
-
-    setTimeout(() => {
-      setIsSpinning(false);
-      if (isWin) {
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-        confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
-
-        if (activePreset && targetBalanceTon > 0) {
-          const updatedBal = Number((currentBal + targetBalanceTon).toFixed(2));
-          saveBalanceToDb(updatedBal);
-
-          if (selectedSource) {
-            setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
-          }
-        } else if (selectedTarget) {
-          if (selectedSource) {
-            setUserInventory((prev) => [
-              ...prev.filter((i) => i.id !== selectedSource.id),
-              { ...selectedTarget, id: Date.now() },
-            ]);
-          } else {
-            setUserInventory((prev) => [
-              ...prev,
-              { ...selectedTarget, id: Date.now() },
-            ]);
-          }
-        }
-
-        setSelectedSource(null);
-        setSelectedTarget(null);
-        setActivePreset(null);
-        setBalanceSliderPercent(0);
-      } else {
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
-        if (selectedSource) {
-          setUserInventory((prev) => prev.filter((i) => i.id !== selectedSource.id));
-        }
-        setSelectedSource(null);
-        setActivePreset(null);
-        setBalanceSliderPercent(0);
+      // Списываем поставленный баланс
+      let currentBal = balanceTon;
+      if (balanceBetTon > 0) {
+        currentBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
+        saveBalanceToDb(currentBal);
       }
-    }, spinDuration);
+
+      const sourceToDrop = selectedSource;
+      const targetToAdd = selectedTarget;
+      const targetWonTon = targetBalanceTon;
+      const wasPreset = !!activePreset;
+
+      setTimeout(async () => {
+        setIsSpinning(false);
+        try {
+          if (isWin) {
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+            confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
+
+            if (wasPreset && targetWonTon > 0) {
+              const updatedBal = Number((currentBal + targetWonTon).toFixed(2));
+              saveBalanceToDb(updatedBal);
+
+              if (sourceToDrop) {
+                setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
+              }
+            } else if (targetToAdd) {
+              if (sourceToDrop) {
+                setUserInventory((prev) => [
+                  ...prev.filter((i) => i.id !== sourceToDrop.id),
+                  { ...targetToAdd, id: Date.now() },
+                ]);
+              } else {
+                setUserInventory((prev) => [
+                  ...prev,
+                  { ...targetToAdd, id: Date.now() },
+                ]);
+              }
+            }
+          } else {
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+            if (sourceToDrop) {
+              setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
+            }
+          }
+        } catch (innerErr) {
+          console.error('Ошибка завершения апгрейда:', innerErr);
+        } finally {
+          setSelectedSource(null);
+          setSelectedTarget(null);
+          setActivePreset(null);
+          setBalanceSliderPercent(0);
+          loadInventory();
+        }
+      }, spinDuration);
+    } catch (err) {
+      console.error('Критическая ошибка апгрейда:', err);
+      setIsSpinning(false);
+    }
   };
 
   // Оплата звёздами
@@ -579,7 +624,7 @@ export default function App() {
     }
   };
 
-  // Пополнение TON через кошелек
+  // Пополнение через кошелек
   const handleRealTonDeposit = async () => {
     if (!wallet) return;
 
@@ -605,12 +650,11 @@ export default function App() {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.5 } });
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Ошибка отправки';
-      console.error(errorMsg);
+      console.error(err);
     }
   };
 
-  // Оплата через CryptoBot
+  // CryptoBot
   const handleCryptoBotPayment = async () => {
     const tg = window.Telegram?.WebApp;
     const amount = parseFloat(cryptoPayAmount);
@@ -644,7 +688,7 @@ export default function App() {
     try {
       await tonConnectUI.disconnect();
     } catch (e) {
-      console.error('Ошибка отвязки кошелька:', e);
+      console.error(e);
     }
   };
 
@@ -660,7 +704,6 @@ export default function App() {
   const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
   const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
 
-  // Оранжевый сектор центрирован строго внизу симметрично
   const halfPercent = chance > 0 ? chance / 2 : 0;
   const startP = 50 - halfPercent;
   const endP = 50 + halfPercent;
@@ -670,7 +713,6 @@ export default function App() {
 
   /**
    * КАРТОЧКА ПОДАРКА ДЛЯ ИНВЕНТАРЯ И ЦЕЛИ (ТЕЛЕГРАМ СТИЛЬ):
-   * Стеклянная плашка с ценой и иконкой ton.png поверх изображения
    */
   const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
     return (
@@ -705,7 +747,6 @@ export default function App() {
             justifyContent: 'center',
           }}
         >
-          {/* Стеклянный бейдж цены с иконкой ton.png слева сверху */}
           <div
             style={{
               position: 'absolute',
@@ -798,13 +839,11 @@ export default function App() {
   };
 
   /**
-   * КАРТОЧКА МАГАЗИНА (ТОЧНО КАК НА ВТОРОМ ФОТО):
-   * - Тёмный контейнер с крупным скруглением
-   * - Квадратная картинка подарка с цветным фоном
-   * - Жирное белое название и серый номер
-   * - Ярко-синяя овальная кнопка с ценой и символом TON
+   * КАРТОЧКА МАГАЗИНА (КАК НА ФОТО):
    */
   const renderMarketplaceCard = (gift: BankGift) => {
+    const isCurrentBuying = isBuying === gift.id;
+
     return (
       <div
         key={gift.id}
@@ -882,35 +921,39 @@ export default function App() {
 
         <button
           onClick={() => handleBuyGiftInShop(gift)}
+          disabled={isCurrentBuying}
           style={{
             width: '100%',
             borderRadius: '18px',
-            background: '#007aff',
+            background: isCurrentBuying ? '#3b82f6' : '#007aff',
             border: 'none',
             padding: '9px 6px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '5px',
-            cursor: 'pointer',
+            cursor: isCurrentBuying ? 'wait' : 'pointer',
             boxShadow: '0 4px 14px rgba(0, 122, 255, 0.4)',
             transition: 'transform 0.15s ease, background 0.15s ease',
+            opacity: isCurrentBuying ? 0.7 : 1,
           }}
         >
           <span style={{ fontSize: '13px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.3px' }}>
-            {gift.price_ton}
+            {isCurrentBuying ? 'Покупка...' : gift.price_ton}
           </span>
-          <img
-            src={ICONS.ton}
-            alt="TON"
-            style={{
-              width: '13px',
-              height: '13px',
-              borderRadius: '3px',
-              display: 'block',
-              objectFit: 'contain',
-            }}
-          />
+          {!isCurrentBuying && (
+            <img
+              src={ICONS.ton}
+              alt="TON"
+              style={{
+                width: '13px',
+                height: '13px',
+                borderRadius: '3px',
+                display: 'block',
+                objectFit: 'contain',
+              }}
+            />
+          )}
         </button>
       </div>
     );
@@ -1456,7 +1499,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Карточки апгрейда: Исходная ставка -> Желаемая цель */}
+            {/* Карточки апгрейда */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
               <div
                 onClick={() => setSubTab('inventory')}
@@ -1776,7 +1819,6 @@ export default function App() {
 
           {/* КОНТЕНТ ТАБОВ */}
           <div style={{ marginTop: '14px' }}>
-            {/* ТАБ 1: ИНВЕНТАРЬ */}
             {subTab === 'inventory' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
@@ -1840,7 +1882,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ТАБ 2: ЖЕЛАЕМЫЙ ПРЕДМЕТ (ИЗ БАНКА) */}
             {subTab === 'targets' && (
               <div>
                 {bankVault.length === 0 ? (
@@ -2069,7 +2110,6 @@ export default function App() {
               paddingBottom: '4px',
             }}
           >
-            {/* Кнопка сортировки по цене */}
             <button
               onClick={() => {
                 window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
