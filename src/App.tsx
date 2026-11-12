@@ -119,7 +119,7 @@ export default function App() {
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
   const [isBuying, setIsBuying] = useState<number | null>(null);
 
-  // Ползунок ставки балансом: процент от баланса (0%..100%)
+  // Ползунок доплаты балансом TON (0%..100% от текущего баланса)
   const [balanceSliderPercent, setBalanceSliderPercent] = useState<number>(0);
 
   // Переключатель под кнопкой: «Инвентарь» / «Желаемый предмет»
@@ -188,7 +188,9 @@ export default function App() {
     return saved ? parseFloat(saved) : 0.0;
   });
 
+  // Выбранный подарок из инвентаря (ОБЯЗАТЕЛЕН)
   const [selectedSource, setSelectedSource] = useState<BankGift | null>(null);
+  // Желаемый подарок из банка (ОБЯЗАТЕЛЕН)
   const [selectedTarget, setSelectedTarget] = useState<BankGift | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
@@ -413,40 +415,83 @@ export default function App() {
       });
   }, [bankVault, shopFilterType, shopFilterModel, shopFilterBackdrop, shopSortOrder]);
 
-  const balanceBetTon = Number(((balanceTon * balanceSliderPercent) / 100).toFixed(2));
+  // Баланс используется ТОЛЬКО как доплата к выбранному подарку
+  const balanceBetTon = selectedSource
+    ? Number(((balanceTon * balanceSliderPercent) / 100).toFixed(2))
+    : 0;
+
   const sourcePriceTon = selectedSource ? (Number(selectedSource.price_ton) || 0) : 0;
-  const totalBetAmount = Number((sourcePriceTon + balanceBetTon).toFixed(2));
+  // Общая ставка = стоимость подарка + доплата балансом
+  const totalBetAmount = selectedSource ? Number((sourcePriceTon + balanceBetTon).toFixed(2)) : 0;
 
-  const calculateTargetBalanceTon = (): number => {
-    if (!activePreset || totalBetAmount <= 0) return 0;
-    if (activePreset === 'm1') return Number((totalBetAmount * customMultipliers[0]).toFixed(2));
-    if (activePreset === 'm2') return Number((totalBetAmount * customMultipliers[1]).toFixed(2));
-    if (activePreset === 'm3') return Number((totalBetAmount * customMultipliers[2]).toFixed(2));
-    if (activePreset === 'p1') return Number(((totalBetAmount * 0.95 * 100) / customPercents[0]).toFixed(2));
-    if (activePreset === 'p2') return Number(((totalBetAmount * 0.95 * 100) / customPercents[1]).toFixed(2));
-    if (activePreset === 'p3') return Number(((totalBetAmount * 0.95 * 100) / customPercents[2]).toFixed(2));
-    return 0;
-  };
+  // Цель — ВСЕГДА подарок из банка
+  const targetPriceTon = selectedTarget ? (Number(selectedTarget.price_ton) || 0) : 0;
 
-  const targetBalanceTon = calculateTargetBalanceTon();
-  const selectedTargetPriceTon = selectedTarget ? (Number(selectedTarget.price_ton) || 0) : 0;
-  const targetPriceTon = activePreset && targetBalanceTon > 0
-    ? targetBalanceTon
-    : selectedTargetPriceTon;
-
+  // Расчёт шанса рулетки (от 1% до 85%)
   const calculateChance = (): number => {
+    if (!selectedSource || !selectedTarget) return 0;
     if (targetPriceTon <= 0 || totalBetAmount <= 0) return 0;
-    if (activePreset && (activePreset === 'p1' || activePreset === 'p2' || activePreset === 'p3')) {
-      if (activePreset === 'p1') return customPercents[0];
-      if (activePreset === 'p2') return customPercents[1];
-      if (activePreset === 'p3') return customPercents[2];
-    }
-    if (totalBetAmount >= targetPriceTon) return 0;
+    if (totalBetAmount >= targetPriceTon) return 85.0; // Максимальный шанс если ставка больше или равна
     const raw = (totalBetAmount / targetPriceTon) * 0.95 * 100;
     return Math.min(Math.max(Number(raw.toFixed(2)), 1.0), 85.0);
   };
 
   const chance = calculateChance();
+
+  /**
+   * Кнопки x2, x4, x8 и % теперь автоматически ищут и выбирают
+   * подходящий реальный ПОДАРОК из банка подарков!
+   */
+  const handlePresetClick = (presetId: string) => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+
+    if (activePreset === presetId) {
+      setActivePreset(null);
+      return;
+    }
+
+    if (!selectedSource) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
+      alert('Сначала выберите подарок из своего инвентаря слева!');
+      setSubTab('inventory');
+      return;
+    }
+
+    if (bankVault.length === 0) {
+      alert('В банке пока нет подарков для подбора');
+      return;
+    }
+
+    setActivePreset(presetId);
+
+    // Вычисляем желаемую цену подарка
+    let desiredPrice = 0;
+    if (presetId === 'm1') desiredPrice = totalBetAmount * customMultipliers[0];
+    else if (presetId === 'm2') desiredPrice = totalBetAmount * customMultipliers[1];
+    else if (presetId === 'm3') desiredPrice = totalBetAmount * customMultipliers[2];
+    else if (presetId === 'p1') desiredPrice = (totalBetAmount * 0.95 * 100) / customPercents[0];
+    else if (presetId === 'p2') desiredPrice = (totalBetAmount * 0.95 * 100) / customPercents[1];
+    else if (presetId === 'p3') desiredPrice = (totalBetAmount * 0.95 * 100) / customPercents[2];
+
+    // Находим подарок в банке, цена которого ближе всего к желаемой и дороже текущей ставки
+    const candidates = bankVault.filter((g) => Number(g.price_ton) > sourcePriceTon);
+    const poolToSearch = candidates.length > 0 ? candidates : bankVault;
+
+    let closestGift = poolToSearch[0];
+    let minDiff = Math.abs(Number(closestGift.price_ton) - desiredPrice);
+
+    for (const g of poolToSearch) {
+      const diff = Math.abs(Number(g.price_ton) - desiredPrice);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestGift = g;
+      }
+    }
+
+    if (closestGift) {
+      setSelectedTarget(closestGift);
+    }
+  };
 
   const getChanceLabel = (c: number): string => {
     if (c <= 0) return 'Ожидание';
@@ -498,27 +543,11 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
-  const handlePresetClick = (presetId: string) => {
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-
-    if (activePreset === presetId) {
-      setActivePreset(null);
-      return;
-    }
-
-    if (totalBetAmount <= 0 && balanceTon > 0) {
-      setBalanceSliderPercent(25);
-    }
-
-    setActivePreset(presetId);
-    setSelectedTarget(null);
-  };
-
   /**
-   * АПГРЕЙД: БЕЗОПАСНАЯ ЛОГИКА
+   * АПГРЕЙД: БЕЗОПАСНАЯ ЛОГИКА (ТОЛЬКО ПОДАРОК -> ПОДАРОК)
    */
   const handleUpgrade = async () => {
-    if (isSpinning || chance <= 0 || totalBetAmount <= 0 || targetPriceTon <= totalBetAmount) return;
+    if (isSpinning || !selectedSource || !selectedTarget || chance <= 0) return;
 
     if (balanceBetTon > balanceTon) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
@@ -551,16 +580,14 @@ export default function App() {
 
       const spinDuration = isFastSpin ? 800 : 3200;
 
-      let currentBal = balanceTon;
+      // Списываем доплату с баланса TON, если она была
       if (balanceBetTon > 0) {
-        currentBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
-        saveBalanceToDb(currentBal);
+        const newBal = Number(Math.max(0, balanceTon - balanceBetTon).toFixed(2));
+        saveBalanceToDb(newBal);
       }
 
       const sourceToDrop = selectedSource;
       const targetToAdd = selectedTarget;
-      const targetWonTon = targetBalanceTon;
-      const wasPreset = !!activePreset;
 
       setTimeout(async () => {
         setIsSpinning(false);
@@ -569,32 +596,16 @@ export default function App() {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
             confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
 
-            if (wasPreset && targetWonTon > 0) {
-              const updatedBal = Number((currentBal + targetWonTon).toFixed(2));
-              saveBalanceToDb(updatedBal);
-
-              if (sourceToDrop) {
-                setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
-              }
-            } else if (targetToAdd) {
-              const safeAdd = normalizeGift(targetToAdd);
-              if (sourceToDrop) {
-                setUserInventory((prev) => [
-                  ...prev.filter((i) => i.id !== sourceToDrop.id),
-                  { ...safeAdd, id: Date.now() },
-                ]);
-              } else {
-                setUserInventory((prev) => [
-                  ...prev,
-                  { ...safeAdd, id: Date.now() },
-                ]);
-              }
-            }
+            const safeAdd = normalizeGift(targetToAdd);
+            // Удаляем старый предмет и добавляем выигранный
+            setUserInventory((prev) => [
+              ...prev.filter((i) => i.id !== sourceToDrop.id),
+              { ...safeAdd, id: Date.now() },
+            ]);
           } else {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
-            if (sourceToDrop) {
-              setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
-            }
+            // Проигрыш: предмет сгорает
+            setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
           }
         } catch (innerErr) {
           console.error('Ошибка завершения апгрейда:', innerErr);
@@ -728,8 +739,8 @@ export default function App() {
     ? `${wallet.account.address.slice(0, 4)}...${wallet.account.address.slice(-4)}`
     : '';
 
-  const hasTarget = (activePreset && targetBalanceTon > 0) || !!selectedTarget;
-  const canUpgrade = !isSpinning && hasTarget && chance > 0 && totalBetAmount > 0 && balanceBetTon <= balanceTon && targetPriceTon > totalBetAmount;
+  // Кнопка активна ТОЛЬКО когда есть и предмет-источник, и предмет-цель
+  const canUpgrade = !isSpinning && !!selectedSource && !!selectedTarget && chance > 0 && balanceBetTon <= balanceTon;
 
   const halfPercent = chance > 0 ? chance / 2 : 0;
   const startP = 50 - halfPercent;
@@ -868,7 +879,7 @@ export default function App() {
   };
 
   /**
-   * КАРТОЧКА МАГАЗИНА (КАК НА ФОТО):
+   * КАРТОЧКА МАГАЗИНА:
    */
   const renderMarketplaceCard = (gift: BankGift) => {
     const isCurrentBuying = isBuying === gift.id;
@@ -1169,7 +1180,7 @@ export default function App() {
         }
       `}</style>
 
-      {/* ЗАКРУГЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ */}
+      {/* ВЕРХНЯЯ ПАНЕЛЬ */}
       <div style={{ padding: '12px 14px 0 14px' }}>
         <div
           style={{
@@ -1531,7 +1542,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Карточки апгрейда */}
+            {/* Карточки апгрейда: ПОДАРОК ИЗ ИНВЕНТАРЯ ➔ ПОДАРОК ИЗ БАНКА */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
               <div
                 onClick={() => setSubTab('inventory')}
@@ -1540,7 +1551,7 @@ export default function App() {
                   height: '138px',
                   borderRadius: '24px',
                   background: '#171126',
-                  border: totalBetAmount > 0 ? '2px solid #a855f7' : '2px dashed #3a2b61',
+                  border: selectedSource ? '2px solid #a855f7' : '2px dashed #3a2b61',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -1553,11 +1564,12 @@ export default function App() {
               >
                 {selectedSource ? (
                   <>
-                    {renderArenaGiftCard(selectedSource, balanceBetTon > 0 ? `+${balanceBetTon}` : undefined)}
+                    {renderArenaGiftCard(selectedSource, balanceBetTon > 0 ? `+${balanceBetTon.toFixed(2)}` : undefined)}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedSource(null);
+                        setBalanceSliderPercent(0);
                       }}
                       title="Убрать подарок"
                       style={{
@@ -1580,19 +1592,10 @@ export default function App() {
                       ✕
                     </button>
                   </>
-                ) : balanceBetTon > 0 ? (
-                  <>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0, 152, 234, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #0098ea', marginBottom: '4px' }}>
-                      <img src={ICONS.ton} alt="TON" style={{ width: '22px', height: '22px' }} />
-                    </div>
-                    <span style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>Баланс</span>
-                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
-                      {balanceBetTon} TON
-                    </span>
-                  </>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '600', padding: '0 8px' }}>Выбери подарок или баланс</span>
+                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '700', padding: '0 8px' }}>
+                    Выбери подарок для апгрейда
+                  </span>
                 )}
               </div>
 
@@ -1624,7 +1627,7 @@ export default function App() {
                   height: '138px',
                   borderRadius: '24px',
                   background: '#171126',
-                  border: hasTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
+                  border: selectedTarget ? '2px solid #eab308' : '2px dashed #3a2b61',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -1635,26 +1638,45 @@ export default function App() {
                   boxShadow: selectedTarget ? '0 6px 18px rgba(0,0,0,0.5)' : 'none',
                 }}
               >
-                {activePreset && targetBalanceTon > 0 ? (
+                {selectedTarget ? (
                   <>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(234, 179, 8, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #eab308', marginBottom: '4px' }}>
-                      <img src={ICONS.ton} alt="TON" style={{ width: '24px', height: '24px' }} />
-                    </div>
-                    <span style={{ fontSize: '10px', color: '#eab308', fontWeight: '800', textTransform: 'uppercase' }}>Баланс TON</span>
-                    <span style={{ fontSize: '13px', color: '#0098ea', fontWeight: '900', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
-                      {targetBalanceTon} TON
-                    </span>
+                    {renderArenaGiftCard(selectedTarget)}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTarget(null);
+                        setActivePreset(null);
+                      }}
+                      title="Убрать цель"
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        background: 'rgba(0,0,0,0.7)',
+                        border: 'none',
+                        color: '#fff',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                        lineHeight: '1',
+                        padding: 0,
+                        zIndex: 4,
+                      }}
+                    >
+                      ✕
+                    </button>
                   </>
-                ) : selectedTarget ? (
-                  renderArenaGiftCard(selectedTarget)
                 ) : (
-                  <span style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: '700' }}>Цель</span>
+                  <span style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '700', padding: '0 8px' }}>
+                    Выбери цель апгрейда
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* ПОЛОСКА СТАВКИ БАЛАНСОМ */}
+            {/* ПОЛОСКА ДОПЛАТЫ БАЛАНСОМ ДЛЯ ПОВЫШЕНИЯ ШАНСА */}
             <div
               style={{
                 background: '#150f29',
@@ -1665,12 +1687,16 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
+                opacity: selectedSource ? 1 : 0.45,
+                pointerEvents: selectedSource ? 'auto' : 'none',
               }}
             >
-              <div style={{ textAlign: 'left', minWidth: '70px', flexShrink: 0 }}>
-                <div style={{ fontSize: '11px', color: '#8b7fa8', fontWeight: '700' }}>Ставка</div>
+              <div style={{ textAlign: 'left', minWidth: '78px', flexShrink: 0 }}>
+                <div style={{ fontSize: '10px', color: '#8b7fa8', fontWeight: '700', textTransform: 'uppercase' }}>
+                  + Доплата
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                  <img src={ICONS.ton} alt="TON" style={{ width: '14px', height: '14px', borderRadius: '3px' }} />
+                  <img src={ICONS.ton} alt="TON" style={{ width: '13px', height: '13px', borderRadius: '3px' }} />
                   <span style={{ fontSize: '13px', fontWeight: '900', color: '#fff' }}>
                     {balanceBetTon.toFixed(2)}
                   </span>
@@ -1742,17 +1768,15 @@ export default function App() {
             >
               {isSpinning
                 ? (isFastSpin ? '⚡ БЫСТРАЯ КРУТКА...' : 'КРУТИМ РУЛЕТКУ...')
-                : totalBetAmount <= 0
-                ? 'Сделайте ставку'
-                : !hasTarget
-                ? 'Выберите цель'
-                : activePreset && targetBalanceTon > 0
-                ? `Выиграть ${targetBalanceTon} TON`
-                : 'Улучшить'}
+                : !selectedSource
+                ? 'Выберите подарок из инвентаря'
+                : !selectedTarget
+                ? 'Выберите цель из банка'
+                : `Улучшить за ${totalBetAmount.toFixed(2)} TON`}
             </button>
           </div>
 
-          {/* КНОПКИ КОЭФФИЦИЕНТОВ И ПРОЦЕНТОВ */}
+          {/* КНОПКИ БЫСТРОГО ПОДБОРА ПОДАРКА ИЗ БАНКА */}
           <div
             style={{
               display: 'flex',
@@ -1879,7 +1903,7 @@ export default function App() {
                     </div>
                     <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '6px' }}>Ваш инвентарь пуст</div>
                     <p style={{ fontSize: '11px', color: '#8b7fa8', margin: '0 0 14px 0' }}>
-                      Вы можете играть сразу на баланс TON с помощью полоски ставки!
+                      Купите подарок в магазине или отправьте его боту @GuseBank, чтобы начать апгрейд!
                     </p>
                     <button
                       onClick={() => {
@@ -1926,7 +1950,7 @@ export default function App() {
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                     {bankVault.map((gift) =>
-                      renderTelegramNativeCard(gift, selectedTarget?.id === gift.id && !activePreset, () => {
+                      renderTelegramNativeCard(gift, selectedTarget?.id === gift.id, () => {
                         setActivePreset(null);
                         setSelectedTarget(gift);
                         window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -1966,7 +1990,7 @@ export default function App() {
 
             <div style={{ background: '#171126', borderRadius: '22px', padding: '16px', border: '1px solid #271c47', marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '600', marginBottom: '14px', lineHeight: '1.4' }}>
-                Настройте кнопки для быстрого подбора коэффициента
+                Настройте множители для быстрого подбора подарка
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -2034,7 +2058,7 @@ export default function App() {
 
             <div style={{ background: '#171126', borderRadius: '22px', padding: '16px', border: '1px solid #271c47', marginBottom: '20px' }}>
               <div style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '600', marginBottom: '14px', lineHeight: '1.4' }}>
-                Настройте кнопки для быстрого подбора процента
+                Настройте шансы для быстрого подбора подарка
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
