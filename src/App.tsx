@@ -2120,7 +2120,7 @@ export default function App() {
                           setSelectedSource(gift);
                           window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
                         },
-                        true // Режим инвентаря с кнопками «Продать» и «Вывести»
+                        false // Режим инвентаря с кнопками «Продать» и «Вывести»
                       )
                     )}
                   </div>
