@@ -61,6 +61,14 @@ interface ShopBuyResponse {
   item?: BankGift;
 }
 
+function normalizeGift(raw: BankGift): BankGift {
+  return {
+    ...raw,
+    price_ton: Number(raw.price_ton) || 0,
+    price_stars: Number(raw.price_stars) || 0,
+  };
+}
+
 /**
  * АВТОМАТИЧЕСКИЙ НОРМАЛИЗАТОР ССЫЛОК:
  * Исправляет t.me/i/nft, битые ссылки и подставляет прямой CDN Fragment
@@ -204,10 +212,12 @@ export default function App() {
   const loadInventory = useCallback(() => {
     if (!tgUser.id) return;
     setIsCheckingInventory(true);
-    fetch(`/api/inventory/${tgUser.id}?t=${Date.now()}`)
+    fetch(`/api/inventory?userId=${tgUser.id}&t=${Date.now()}`)
       .then((res) => res.json())
       .then((data: { items?: BankGift[] }) => {
-        if (data.items) setUserInventory(data.items);
+        if (Array.isArray(data.items)) {
+          setUserInventory(data.items.map(normalizeGift));
+        }
       })
       .catch(() => {})
       .finally(() => setIsCheckingInventory(false));
@@ -218,7 +228,9 @@ export default function App() {
     fetch(`/api/bank-gifts?t=${Date.now()}`)
       .then((res) => res.json())
       .then((data: { available_gifts?: BankGift[] }) => {
-        if (data.available_gifts) setBankVault(data.available_gifts);
+        if (Array.isArray(data.available_gifts)) {
+          setBankVault(data.available_gifts.map(normalizeGift));
+        }
       })
       .catch(() => {});
   }, []);
@@ -242,10 +254,12 @@ export default function App() {
           if (t) setBalanceTon(parseFloat(t));
         });
 
-      fetch(`/api/inventory/${tgUser.id}?t=${Date.now()}`)
+      fetch(`/api/inventory?userId=${tgUser.id}&t=${Date.now()}`)
         .then((res) => res.json())
         .then((data: { items?: BankGift[] }) => {
-          if (data.items) setUserInventory(data.items);
+          if (Array.isArray(data.items)) {
+            setUserInventory(data.items.map(normalizeGift));
+          }
         })
         .catch(() => {});
     }
@@ -303,7 +317,8 @@ export default function App() {
   const handleBuyGiftInShop = async (gift: BankGift) => {
     if (isBuying) return;
 
-    if (balanceTon < gift.price_ton) {
+    const priceTonNum = Number(gift.price_ton) || 0;
+    if (balanceTon < priceTonNum) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
       setIsDepositOpen(true);
       setDepositStep('methods');
@@ -341,7 +356,8 @@ export default function App() {
       }
 
       if (data.item) {
-        setUserInventory((prev) => [data.item as BankGift, ...prev.filter((i) => i.id !== data.item?.id)]);
+        const normalizedItem = normalizeGift(data.item);
+        setUserInventory((prev) => [normalizedItem, ...prev.filter((i) => i.id !== normalizedItem.id)]);
       }
       setBankVault((prev) => prev.filter((g) => g.id !== gift.id));
 
@@ -391,14 +407,15 @@ export default function App() {
         return true;
       })
       .sort((a, b) => {
-        return shopSortOrder === 'asc'
-          ? a.price_ton - b.price_ton
-          : b.price_ton - a.price_ton;
+        const pA = Number(a.price_ton) || 0;
+        const pB = Number(b.price_ton) || 0;
+        return shopSortOrder === 'asc' ? pA - pB : pB - pA;
       });
   }, [bankVault, shopFilterType, shopFilterModel, shopFilterBackdrop, shopSortOrder]);
 
   const balanceBetTon = Number(((balanceTon * balanceSliderPercent) / 100).toFixed(2));
-  const totalBetAmount = Number(((selectedSource ? selectedSource.price_ton : 0) + balanceBetTon).toFixed(2));
+  const sourcePriceTon = selectedSource ? (Number(selectedSource.price_ton) || 0) : 0;
+  const totalBetAmount = Number((sourcePriceTon + balanceBetTon).toFixed(2));
 
   const calculateTargetBalanceTon = (): number => {
     if (!activePreset || totalBetAmount <= 0) return 0;
@@ -412,9 +429,10 @@ export default function App() {
   };
 
   const targetBalanceTon = calculateTargetBalanceTon();
+  const selectedTargetPriceTon = selectedTarget ? (Number(selectedTarget.price_ton) || 0) : 0;
   const targetPriceTon = activePreset && targetBalanceTon > 0
     ? targetBalanceTon
-    : (selectedTarget ? selectedTarget.price_ton : 0);
+    : selectedTargetPriceTon;
 
   const calculateChance = (): number => {
     if (targetPriceTon <= 0 || totalBetAmount <= 0) return 0;
@@ -559,15 +577,16 @@ export default function App() {
                 setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
               }
             } else if (targetToAdd) {
+              const safeAdd = normalizeGift(targetToAdd);
               if (sourceToDrop) {
                 setUserInventory((prev) => [
                   ...prev.filter((i) => i.id !== sourceToDrop.id),
-                  { ...targetToAdd, id: Date.now() },
+                  { ...safeAdd, id: Date.now() },
                 ]);
               } else {
                 setUserInventory((prev) => [
                   ...prev,
-                  { ...targetToAdd, id: Date.now() },
+                  { ...safeAdd, id: Date.now() },
                 ]);
               }
             }
@@ -723,6 +742,8 @@ export default function App() {
    * КАРТОЧКА ПОДАРКА ДЛЯ ИНВЕНТАРЯ И ЦЕЛИ (ТЕЛЕГРАМ СТИЛЬ):
    */
   const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
+    const safePrice = (Number(gift.price_ton) || 0).toFixed(2);
+
     return (
       <div
         key={gift.id}
@@ -784,7 +805,7 @@ export default function App() {
               }}
             />
             <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.2px' }}>
-              {gift.price_ton}
+              {safePrice}
             </span>
           </div>
 
@@ -851,6 +872,7 @@ export default function App() {
    */
   const renderMarketplaceCard = (gift: BankGift) => {
     const isCurrentBuying = isBuying === gift.id;
+    const safePrice = (Number(gift.price_ton) || 0).toFixed(2);
 
     return (
       <div
@@ -947,7 +969,7 @@ export default function App() {
           }}
         >
           <span style={{ fontSize: '13px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.3px' }}>
-            {isCurrentBuying ? 'Покупка...' : gift.price_ton}
+            {isCurrentBuying ? 'Покупка...' : safePrice}
           </span>
           {!isCurrentBuying && (
             <img
@@ -971,6 +993,8 @@ export default function App() {
    * СЛОТ АРЕНЫ: ОТОБРАЖЕНИЕ ВЫБРАННОГО ПОДАРКА:
    */
   const renderArenaGiftCard = (gift: BankGift, extraSubText?: string) => {
+    const safePrice = (Number(gift.price_ton) || 0).toFixed(2);
+
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: '22px' }}>
         <img
@@ -1026,7 +1050,7 @@ export default function App() {
             }}
           />
           <span style={{ fontSize: '11px', fontWeight: '900', color: '#ffb703', letterSpacing: '-0.2px' }}>
-            {gift.price_ton}
+            {safePrice}
           </span>
           {extraSubText && (
             <span style={{ fontSize: '9px', fontWeight: '800', color: '#4ade80' }}>
