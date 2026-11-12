@@ -1,39 +1,45 @@
-import type { IncomingMessage, ServerResponse } from 'http';
-// Если файл db.ts лежит в самом корне GuseUP:
-import { pool } from '../../../db'; 
+import { Pool } from 'pg';
 
-interface CustomRequest extends IncomingMessage {
-  body?: {
-    userId?: number;
-    giftId?: number;
-  };
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+interface BuyRequestBody {
+  userId?: number;
+  giftId?: number;
 }
 
-export default async function handler(req: CustomRequest, res: ServerResponse) {
-  // Разрешаем CORS
+interface VercelRequest {
+  method?: string;
+  body?: BuyRequestBody;
+}
+
+interface VercelResponse {
+  status: (code: number) => VercelResponse;
+  json: (data: unknown) => void;
+  setHeader: (name: string, value: string) => void;
+  end: () => void;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    res.statusCode = 200;
-    return res.end();
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    res.statusCode = 405;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Vercel автоматически парсит JSON-тело в req.body
-const { userId, giftId } = req.body || {};
-
+  const { userId, giftId } = req.body || {};
 
   if (!userId || !giftId) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Missing userId or giftId' }));
+    return res.status(400).json({ error: 'Missing userId or giftId' });
   }
 
   const client = await pool.connect();
@@ -49,32 +55,28 @@ const { userId, giftId } = req.body || {};
 
     if (giftRes.rows.length === 0) {
       await client.query('ROLLBACK');
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: 'Этот подарок уже куплен или не найден в банке' }));
+      return res.status(400).json({ error: 'Этот подарок уже куплен или не найден в банке' });
     }
 
     const gift = giftRes.rows[0];
     const priceTon = Number(gift.price_ton || 0);
 
-    // 2. Проверяем баланс пользователя
+    // 2. Проверяем баланс пользователя (по telegram_id, как в user-balance.ts!)
     const userRes = await client.query(
-      `SELECT ton_balance FROM users WHERE id = $1 FOR UPDATE`,
+      `SELECT balance_ton FROM users WHERE telegram_id = $1 FOR UPDATE`,
       [userId]
     );
 
-    const currentBalance = Number(userRes.rows[0]?.ton_balance || 0);
+    const currentBalance = Number(userRes.rows[0]?.balance_ton || 0);
     if (currentBalance < priceTon) {
       await client.query('ROLLBACK');
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: 'Недостаточно TON для покупки' }));
+      return res.status(400).json({ error: 'Недостаточно TON для покупки' });
     }
 
     // 3. Списываем TON
     const newBalance = Number((currentBalance - priceTon).toFixed(2));
     await client.query(
-      `UPDATE users SET ton_balance = $1, updated_at = NOW() WHERE id = $2`,
+      `UPDATE users SET balance_ton = $1, updated_at = NOW() WHERE telegram_id = $2`,
       [newBalance, userId]
     );
 
@@ -100,19 +102,15 @@ const { userId, giftId } = req.body || {};
 
     await client.query('COMMIT');
 
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({
+    return res.status(200).json({
       success: true,
       item: invRes.rows[0],
       newBalance,
-    }));
+    });
   } catch (err: unknown) {
     await client.query('ROLLBACK');
     const message = err instanceof Error ? err.message : 'Ошибка при покупке';
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: message }));
+    return res.status(400).json({ error: message });
   } finally {
     client.release();
   }
