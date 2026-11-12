@@ -118,6 +118,7 @@ export default function App() {
   const [bankVault, setBankVault] = useState<BankGift[]>([]);
   const [userInventory, setUserInventory] = useState<BankGift[]>([]);
   const [isBuying, setIsBuying] = useState<number | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
   // Ползунок доплаты балансом TON (0%..100% от текущего баланса)
   const [balanceSliderPercent, setBalanceSliderPercent] = useState<number>(0);
@@ -176,13 +177,13 @@ export default function App() {
   const [onlineCount, setOnlineCount] = useState<number>(1);
 
   // Статистика выведенных предметов
-  const [withdrawnCount] = useState<number>(() => {
+  const [withdrawnCount, setWithdrawnCount] = useState<number>(() => {
     const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
     const saved = localStorage.getItem(`withdrawn_count_${userId}`);
     return saved ? parseInt(saved, 10) : 0;
   });
 
-  const [withdrawnTotalTon] = useState<number>(() => {
+  const [withdrawnTotalTon, setWithdrawnTotalTon] = useState<number>(() => {
     const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
     const saved = localStorage.getItem(`withdrawn_total_${userId}`);
     return saved ? parseFloat(saved) : 0.0;
@@ -314,6 +315,116 @@ export default function App() {
   };
 
   /**
+   * ПРОДАЖА ПОДАРКА ЗА TON (напрямую зачисление на баланс)
+   */
+  const handleSellGift = async (e: React.MouseEvent, gift: BankGift) => {
+    e.stopPropagation();
+    if (actionLoadingId) return;
+
+    const giftPrice = Number(gift.price_ton) || 0;
+    if (giftPrice <= 0) {
+      alert('Цена подарка не определена');
+      return;
+    }
+
+    const confirmed = window.confirm(`Продать «${gift.name}» за ${giftPrice.toFixed(2)} TON на баланс?`);
+    if (!confirmed) return;
+
+    setActionLoadingId(gift.id);
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+
+    try {
+      const res = await fetch('/api/inventory/sell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: tgUser.id,
+          itemId: gift.id,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.newBalance === 'number') {
+          saveBalanceToDb(data.newBalance);
+        } else {
+          saveBalanceToDb(Number((balanceTon + giftPrice).toFixed(2)));
+        }
+      } else {
+        // Fallback если на сервере пока нет роута продажи
+        const newBal = Number((balanceTon + giftPrice).toFixed(2));
+        saveBalanceToDb(newBal);
+      }
+
+      setUserInventory((prev) => prev.filter((i) => i.id !== gift.id));
+      if (selectedSource?.id === gift.id) {
+        setSelectedSource(null);
+        setBalanceSliderPercent(0);
+      }
+
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+    } catch (err) {
+      console.error('Ошибка продажи:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  /**
+   * ВЫВОД ПОДАРКА В TELEGRAM (отправка через бота @GuseBank)
+   */
+  const handleWithdrawGift = async (e: React.MouseEvent, gift: BankGift) => {
+    e.stopPropagation();
+    if (actionLoadingId) return;
+
+    const giftPrice = Number(gift.price_ton) || 0;
+    const confirmed = window.confirm(
+      `Вывести «${gift.name}» на ваш Telegram-аккаунт?\nПодарок отправит наш бот @GuseBank.`
+    );
+    if (!confirmed) return;
+
+    setActionLoadingId(gift.id);
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('heavy');
+
+    try {
+      const res = await fetch('/api/gifts/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: tgUser.id,
+          telegramId: tgUser.id,
+          bankGiftId: gift.id,
+        }),
+      });
+
+      const data = await res.json();
+
+      setUserInventory((prev) => prev.filter((i) => i.id !== gift.id));
+      if (selectedSource?.id === gift.id) {
+        setSelectedSource(null);
+        setBalanceSliderPercent(0);
+      }
+
+      // Обновляем статистику
+      const nextCount = withdrawnCount + 1;
+      const nextTotal = Number((withdrawnTotalTon + giftPrice).toFixed(2));
+      setWithdrawnCount(nextCount);
+      setWithdrawnTotalTon(nextTotal);
+      localStorage.setItem(`withdrawn_count_${tgUser.id}`, String(nextCount));
+      localStorage.setItem(`withdrawn_total_${tgUser.id}`, String(nextTotal));
+
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      alert(data.message || 'Заявка на вывод создана! @GuseBank отправит подарок в ваш профиль.');
+    } catch (err) {
+      console.error('Ошибка вывода:', err);
+      alert('Ошибка при создании заявки на вывод');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  /**
    * НАСТОЯЩАЯ ПОКУПКА В МАГАЗИНЕ С СИНХРОНИЗАЦИЕЙ В БД
    */
   const handleBuyGiftInShop = async (gift: BankGift) => {
@@ -431,7 +542,7 @@ export default function App() {
   const calculateChance = (): number => {
     if (!selectedSource || !selectedTarget) return 0;
     if (targetPriceTon <= 0 || totalBetAmount <= 0) return 0;
-    if (totalBetAmount >= targetPriceTon) return 85.0; // Максимальный шанс если ставка больше или равна
+    if (totalBetAmount >= targetPriceTon) return 85.0;
     const raw = (totalBetAmount / targetPriceTon) * 0.95 * 100;
     return Math.min(Math.max(Number(raw.toFixed(2)), 1.0), 85.0);
   };
@@ -439,8 +550,7 @@ export default function App() {
   const chance = calculateChance();
 
   /**
-   * Кнопки x2, x4, x8 и % теперь автоматически ищут и выбирают
-   * подходящий реальный ПОДАРОК из банка подарков!
+   * Кнопки x2, x4, x8 и % автоматически ищут подходящий ПОДАРОК из банка
    */
   const handlePresetClick = (presetId: string) => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -464,7 +574,6 @@ export default function App() {
 
     setActivePreset(presetId);
 
-    // Вычисляем желаемую цену подарка
     let desiredPrice = 0;
     if (presetId === 'm1') desiredPrice = totalBetAmount * customMultipliers[0];
     else if (presetId === 'm2') desiredPrice = totalBetAmount * customMultipliers[1];
@@ -473,7 +582,6 @@ export default function App() {
     else if (presetId === 'p2') desiredPrice = (totalBetAmount * 0.95 * 100) / customPercents[1];
     else if (presetId === 'p3') desiredPrice = (totalBetAmount * 0.95 * 100) / customPercents[2];
 
-    // Находим подарок в банке, цена которого ближе всего к желаемой и дороже текущей ставки
     const candidates = bankVault.filter((g) => Number(g.price_ton) > sourcePriceTon);
     const poolToSearch = candidates.length > 0 ? candidates : bankVault;
 
@@ -597,14 +705,12 @@ export default function App() {
             confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
 
             const safeAdd = normalizeGift(targetToAdd);
-            // Удаляем старый предмет и добавляем выигранный
             setUserInventory((prev) => [
               ...prev.filter((i) => i.id !== sourceToDrop.id),
               { ...safeAdd, id: Date.now() },
             ]);
           } else {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
-            // Проигрыш: предмет сгорает
             setUserInventory((prev) => prev.filter((i) => i.id !== sourceToDrop.id));
           }
         } catch (innerErr) {
@@ -751,9 +857,16 @@ export default function App() {
 
   /**
    * КАРТОЧКА ПОДАРКА ДЛЯ ИНВЕНТАРЯ И ЦЕЛИ (ТЕЛЕГРАМ СТИЛЬ):
+   * В инвентаре содержит нижнюю панель с кнопками «Продать» (TON) и «Вывести» (стрелка вверх-вправо ↗)
    */
-  const renderTelegramNativeCard = (gift: BankGift, isSelected: boolean, onSelect: () => void) => {
+  const renderTelegramNativeCard = (
+    gift: BankGift,
+    isSelected: boolean,
+    onSelect: () => void,
+    isInventoryMode: boolean = false
+  ) => {
     const safePrice = (Number(gift.price_ton) || 0).toFixed(2);
+    const isLoading = actionLoadingId === gift.id;
 
     return (
       <div
@@ -773,6 +886,7 @@ export default function App() {
             : '0 4px 14px rgba(0,0,0,0.3)',
           transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
           transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+          opacity: isLoading ? 0.6 : 1,
         }}
       >
         <div
@@ -843,7 +957,7 @@ export default function App() {
         <div
           style={{
             background: '#120d22',
-            padding: '8px 10px 9px 10px',
+            padding: '8px 10px 6px 10px',
             borderTop: '1px solid rgba(255,255,255,0.06)',
             textAlign: 'left',
             zIndex: 3,
@@ -874,6 +988,81 @@ export default function App() {
             {gift.serial_number || '#0000'}
           </div>
         </div>
+
+        {/* ПАНЕЛЬ ДВУХ КНОПОК КАК НА ФОТО: [ ПРОДАТЬ (TON) | ВЫВЕСТИ (↗) ] */}
+        {isInventoryMode && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              padding: '6px 8px 8px 8px',
+              background: '#0d091a',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              gap: '4px',
+            }}
+          >
+            {/* Кнопка Продать за TON */}
+            <button
+              onClick={(e) => handleSellGift(e, gift)}
+              title="Продать за TON"
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '10px',
+                padding: '5px 0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '3px',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+              }}
+            >
+              <img
+                src={ICONS.ton}
+                alt="Продать"
+                style={{ width: '13px', height: '13px', objectFit: 'contain' }}
+              />
+            </button>
+
+            <div style={{ width: '1px', height: '14px', background: 'rgba(255,255,255,0.12)' }} />
+
+            {/* Кнопка Вывести (стрелка ↗) */}
+            <button
+              onClick={(e) => handleWithdrawGift(e, gift)}
+              title="Вывести подарок в Telegram"
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '10px',
+                padding: '5px 0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+                color: '#cbd5e1',
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="7" y1="17" x2="17" y2="7" />
+                <polyline points="7 7 17 7 17 17" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -1744,7 +1933,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* КНОПКА АПГРЕЙДА */}
+            {/* КНОПКА «УЛУЧШИТЬ» */}
             <button
               onClick={handleUpgrade}
               disabled={!canUpgrade}
@@ -1768,11 +1957,7 @@ export default function App() {
             >
               {isSpinning
                 ? (isFastSpin ? '⚡ БЫСТРАЯ КРУТКА...' : 'КРУТИМ РУЛЕТКУ...')
-                : !selectedSource
-                ? 'Выберите подарок из инвентаря'
-                : !selectedTarget
-                ? 'Выберите цель из банка'
-                : `Улучшить за ${totalBetAmount.toFixed(2)} TON`}
+                : 'Улучшить'}
             </button>
           </div>
 
@@ -1928,10 +2113,15 @@ export default function App() {
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                     {userInventory.map((gift) =>
-                      renderTelegramNativeCard(gift, selectedSource?.id === gift.id, () => {
-                        setSelectedSource(gift);
-                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                      })
+                      renderTelegramNativeCard(
+                        gift,
+                        selectedSource?.id === gift.id,
+                        () => {
+                          setSelectedSource(gift);
+                          window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                        },
+                        true // Режим инвентаря с кнопками «Продать» и «Вывести»
+                      )
                     )}
                   </div>
                 )}
@@ -1950,11 +2140,16 @@ export default function App() {
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                     {bankVault.map((gift) =>
-                      renderTelegramNativeCard(gift, selectedTarget?.id === gift.id, () => {
-                        setActivePreset(null);
-                        setSelectedTarget(gift);
-                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                      })
+                      renderTelegramNativeCard(
+                        gift,
+                        selectedTarget?.id === gift.id,
+                        () => {
+                          setActivePreset(null);
+                          setSelectedTarget(gift);
+                          window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                        },
+                        false
+                      )
                     )}
                   </div>
                 )}
@@ -2584,13 +2779,18 @@ export default function App() {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                   {userInventory.map((gift) =>
-                    renderTelegramNativeCard(gift, selectedSource?.id === gift.id, () => {
-                      setSelectedSource(gift);
-                      setIsProfileOpen(false);
-                      setActiveTab('upgrade');
-                      setSubTab('targets');
-                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                    })
+                    renderTelegramNativeCard(
+                      gift,
+                      selectedSource?.id === gift.id,
+                      () => {
+                        setSelectedSource(gift);
+                        setIsProfileOpen(false);
+                        setActiveTab('upgrade');
+                        setSubTab('targets');
+                        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                      },
+                      true // Кнопки «Продать» и «Вывести» в профиле тоже доступны
+                    )
                   )}
                 </div>
               )}
